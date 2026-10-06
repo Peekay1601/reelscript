@@ -706,6 +706,12 @@
     render();
     persist();
     closeSidebar();
+    if (SF.looksMarkdown(s.content)) {
+      // Saved before ChatGPT conversion existed: convert now (Undo is offered in the toast)
+      setTimeout(() => {
+        if (current() === s && SF.looksMarkdown(content())) runCleanup();
+      }, 150);
+    }
   }
 
   function createScript(name, content) {
@@ -1115,6 +1121,18 @@
     ['keyup', 'click', 'focus'].forEach((ev) => ta.addEventListener(ev, afterCaretMove));
     ta.addEventListener('paste', (e) => {
       const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
+      if (SF.looksMarkdown(text)) {
+        // ChatGPT / Markdown: convert on the way in so # headings never get lost
+        e.preventDefault();
+        const conv = SF.convertPasted(text);
+        let insert = conv.text;
+        const before = ta.value.slice(0, ta.selectionStart);
+        if (before.trim() && /^Title:/m.test(insert.split('\n\n')[0] || '')) insert = insert.replace(/^[\s\S]*?\n\n/, ''); // title page only at the top
+        replaceRange(ta.selectionStart, ta.selectionEnd, (before && !before.endsWith('\n\n') ? '\n\n' : '') + insert);
+        autoName();
+        setTimeout(() => toast(conv.info, { label: 'Undo', run: () => { ta.focus(); document.execCommand('undo'); } }, 7000), 30);
+        return;
+      }
       if (text.length > 200 && looksMessy(text)) {
         const msg = SF.looksMarkdown(text) ? 'That looks like ChatGPT formatting (#, **).' : 'Pasted text looks like it needs tidying.';
         setTimeout(() => toast(msg, { label: SF.looksMarkdown(text) ? 'Convert to script' : 'Smart clean-up', run: runCleanup }), 50);

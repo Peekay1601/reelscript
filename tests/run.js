@@ -329,6 +329,19 @@ test('### scene headings typed directly in Fountain still print', () => {
   assert.deepStrictEqual(types('### EXT. ROOF - NIGHT\n\nWind.'), ['scene_heading', 'action']);
 });
 
+test('no # line ever disappears, even unconverted', () => {
+  const src = '# MY SHOW\nSome intro text.\n## EPISODE 3 — THE END\n### MOMENTS LATER\n### Ext. beach - day\n### MATCH CUT:\n## What this protects\n# Act One\nAction under it.';
+  const p = SF.parse(src);
+  assert.deepStrictEqual(p.title.title, ['MY SHOW']);
+  assert.deepStrictEqual(p.tokens.map((t) => t.type), ['action', 'episode', 'scene_heading', 'scene_heading', 'transition', 'action', 'action', 'action']);
+  const printed = SF.layout(src).pages.map((pg) => pg.items.map(lineText).join('\n')).join('\n');
+  ['Some intro text.', 'EPISODE 3', 'MOMENTS LATER', 'EXT. BEACH', 'MATCH CUT:', 'What this protects', 'Act One', 'Action under it.'].forEach((w) => assert.ok(printed.includes(w), w));
+  const docx = Buffer.from(SF.buildDOCX(src, {})).toString('utf8');
+  ['EPISODE 3', 'MOMENTS LATER', 'What this protects'].forEach((w) => assert.ok(docx.includes(w), 'docx ' + w));
+  const fdx = SF.toFDX(src);
+  ['EPISODE 3', 'MOMENTS LATER', 'What this protects'].forEach((w) => assert.ok(fdx.includes(w), 'fdx ' + w));
+});
+
 // ---------------------------------------------------------------- docx
 test('DOCX is a valid zip with screenplay styles', () => {
   const bytes = SF.buildDOCX(SF.SAMPLE, {}, { title: 'T' });

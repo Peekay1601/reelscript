@@ -115,6 +115,7 @@
 
     const { fields, lineCount } = parseTitlePage(allLines.map((l) => (l === null ? '' : l)));
     const tokens = [];
+    let parsedTitle = null; // "# Title" on the first line of a script without a title page
     const lines = allLines;
 
     const softBreak = new Set(); // lines treated as if preceded by a blank line
@@ -151,12 +152,16 @@
         continue;
       }
       if (line.startsWith('#')) {
+        // Fountain "sections" are normally hidden, but scripts pasted from ChatGPT use # for
+        // real headings. Never let a # line vanish: print it as the element it looks like.
         const depth = /^#+/.exec(line)[0].length;
         const text = line.slice(depth).trim();
-        if (isEpisode(text)) tokens.push({ type: 'episode', text, line: i });
-        else if (isSceneHeading(text) && isAllCaps(text)) {
-          // Markdown-style "### EXT. PLACE - NIGHT" (e.g. pasted from ChatGPT)
-          let t = text;
+        const plain = plainText(text).trim();
+        softBreak.add(i + 1);
+        if (!plain) continue;
+        if (isEpisode(plain)) tokens.push({ type: 'episode', text: plain, line: i });
+        else if (isSceneHeading(plain)) {
+          let t = plain;
           let number = null;
           const nm = SCENE_NUM_RE.exec(t);
           if (nm) {
@@ -164,7 +169,15 @@
             t = t.slice(0, nm.index).trim();
           }
           tokens.push({ type: 'scene_heading', text: t, number, line: i });
-        } else tokens.push({ type: 'section', depth, text, line: i });
+        } else if (!fields && !tokens.length && depth === 1) {
+          parsedTitle = { title: [plain] };
+        } else if (isAllCaps(plain) && /^(FADE|CUT TO|SMASH CUT|MATCH CUT|JUMP CUT|DISSOLVE)/.test(plain)) {
+          tokens.push({ type: 'transition', text: plain, line: i });
+        } else if (isAllCaps(plain) && plain.length <= 70) {
+          tokens.push({ type: 'scene_heading', text: plain, number: null, line: i });
+        } else {
+          tokens.push({ type: 'action', lines: [{ text: `**${plain.replace(/\*/g, '')}**`, line: i }], line: i });
+        }
         continue;
       }
       if (prevBlank && isEpisode(line) && !isSceneHeading(line)) {
@@ -222,7 +235,7 @@
         for (; j < lines.length; j++) {
           const l = lines[j];
           if (l === null) continue;
-          if ((isBlank(l) && l !== '  ') || softBreak.has(j)) break;
+          if ((isBlank(l) && l !== '  ') || softBreak.has(j) || /^\s*#{1,6}\s+\S/.test(l)) break;
           const t = l.trim();
           if (/^\(.*\)$/.test(t)) block.parts.push({ type: 'parenthetical', text: t, line: j });
           else if (t.startsWith('~')) block.parts.push({ type: 'lyrics', text: t.slice(1).trim(), line: j });
@@ -250,7 +263,7 @@
       for (; j < lines.length; j++) {
         const l = lines[j];
         if (l === null) continue;
-        if (isBlank(l) || (j > i && softBreak.has(j))) break;
+        if (isBlank(l) || (j > i && (softBreak.has(j) || /^\s*#{1,6}\s+\S/.test(l)))) break;
         let t = l.trim();
         if (j === i && forcedAction) t = t.slice(1);
         actionLines.push({ text: t, line: j });
@@ -259,7 +272,7 @@
       tokens.push({ type: 'action', lines: actionLines, line: actionLines[0].line });
     }
 
-    return { title: fields, tokens, notes, titleLineCount: lineCount };
+    return { title: fields || parsedTitle, tokens, notes, titleLineCount: lineCount };
   }
 
   /**

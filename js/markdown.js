@@ -62,8 +62,12 @@
    */
   function fromMarkdown(src, opts) {
     const keepNotes = !!(opts && opts.keepNotes);
-    const lines = SF.normalize(src)
-      .split('\n')
+    // A Fountain title page may already be on top (e.g. a script converted before): keep it.
+    const existing = SF.getTitleFields(src);
+    const srcLines = SF.normalize(src).split('\n');
+    const tpCount = SF.parse(src).titleLineCount;
+    const lines = srcLines
+      .slice(tpCount)
       .map((l) => stripCitations(l.replace(/[ \t]+$/, '').replace(/ /g, ' ')));
     const out = [];
     const title = { title: [], credit: [], authors: [], source: [], notes: [] };
@@ -273,11 +277,14 @@
     const body = out.filter((l, k) => !(l === '' && out[k - 1] === '')).join('\n').replace(/^\n+/, '');
 
     const fields = {
-      title: title.title.join('\n'),
-      credit: title.credit[0] || (title.authors.length ? 'Written by' : ''),
-      authors: title.authors.join('\n'),
-      source: title.source.join('\n'),
-      notes: title.notes.join('\n'),
+      title: title.title.join('\n') || existing.title,
+      credit: title.credit[0] || existing.credit || (title.authors.length || existing.authors ? 'Written by' : ''),
+      authors: title.authors.join('\n') || existing.authors,
+      source: title.source.join('\n') || existing.source,
+      'draft date': existing['draft date'],
+      contact: existing.contact,
+      copyright: existing.copyright,
+      notes: title.notes.join('\n') || existing.notes,
     };
     const head = SF.setTitleFields('', fields).trim();
     return { text: (head ? head + '\n\n' : '') + body + '\n', notes, episodes, scenes };

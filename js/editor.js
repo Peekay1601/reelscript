@@ -70,7 +70,9 @@
     const text = SF.normalize(src);
     const parsed = SF.parse(text);
     const lines = text.split('\n');
-    const titleBlock = lines.slice(0, parsed.titleLineCount).join('\n').replace(/\s+$/, '');
+    let titleBlock = lines.slice(0, parsed.titleLineCount).join('\n').replace(/\s+$/, '');
+    // "# Title" first line (Markdown) → keep it as a proper title page
+    if (!titleBlock && parsed.title && parsed.title.title) titleBlock = SF.setTitleFields('', { title: parsed.title.title.join('\n') }).trim();
     const els = [];
     const push = (type, t, extra) => els.push(Object.assign({ type, text: t }, extra || {}));
     const dialogue = (d, dual) => {
