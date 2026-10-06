@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261006-4">
+  <link rel="stylesheet" href="styles.css?v=20261006-5">
   <style id="print-page-size">@page { size: 8.5in 11in; margin: 0; }</style>
 </head>
 <body>
@@ -40,7 +40,7 @@
       <div class="sidebar-footer">
         <button class="sidebar-link" id="open-guide"><svg class="i"><use href="#i-book"/></svg>Formatting guide</button>
         <button class="sidebar-link" id="theme-toggle"><svg class="i"><use href="#i-moon"/></svg><span>Toggle theme</span></button>
-        <p class="sidebar-note">Scripts are saved privately in this browser.</p>
+        <p class="sidebar-note">Scripts are saved privately in this browser. <span id="app-version"></span></p>
       </div>
     </aside>
     <div class="scrim" id="scrim"></div>
@@ -91,6 +91,7 @@
               <option value="dialogue">Dialogue</option>
               <option value="transition">Transition</option>
               <option value="centered">Centered</option>
+              <option value="note">Note (not printed)</option>
               <option value="page_break">Page Break</option>
             </select>
           </label>
@@ -124,7 +125,10 @@
       <div class="workspace" id="workspace">
         <section class="pane editor-pane" aria-label="Editor">
           <div class="editor-wrap">
-            <textarea id="editor" spellcheck="true" autocapitalize="off" autocomplete="off" aria-label="Screenplay text"></textarea>
+            <div id="fv-wrap" class="fv-wrap">
+              <div class="fv-hl" id="fv-hl" aria-hidden="true"><div class="fv-hl-inner" id="fv-hl-inner"></div></div>
+              <textarea id="editor" spellcheck="true" autocapitalize="off" autocomplete="off" aria-label="Screenplay text"></textarea>
+            </div>
             <div id="script-host" hidden></div>
             <div class="welcome" id="welcome" hidden>
               <div class="welcome-inner">
@@ -230,7 +234,7 @@
       <div class="modal-body">
         <p class="muted">Paste a script from <strong>ChatGPT</strong> or another AI chat, Word, Google Docs or a PDF. ReelScript finds the title, episodes, scene headings, characters, dialogue and transitions. It removes Markdown symbols (#, **, ---), page numbers, (MORE) and CONTINUED markers.</p>
         <textarea id="paste-input" rows="14" class="mono" placeholder="## EPISODE 01 — “NOT WITHOUT YOU”&#10;### EXT. NEIGHBOURHOOD STAGE – NIGHT&#10;**KARTHIK**&#10;I can play. Keep dancing.&#10;…"></textarea>
-        <label class="check-inline"><input type="checkbox" id="paste-keep-notes"> Keep ChatGPT's commentary (intro, "Dramatic movement", "Emotional high"…) as hidden notes. Notes aren't printed and open in Fountain view.</label>
+        <label class="check-inline"><input type="checkbox" id="paste-keep-notes"> Keep ChatGPT's commentary (intro, "Dramatic movement", "Emotional high"…) as yellow notes on the page. Notes are never printed or exported.</label>
       </div>
       <footer class="modal-foot"><button class="btn btn-ghost" value="cancel">Cancel</button><button class="btn btn-primary" value="ok">Clean up & open</button></footer>
     </form>
@@ -283,7 +287,8 @@
             <tr><td>Lyrics</td><td><code>~Tum hi ho…</code></td><td>Italic, dialogue width</td></tr>
             <tr><td>Page break</td><td><code>===</code></td><td></td></tr>
             <tr><td>Emphasis</td><td><code>*italic* **bold** _underline_</code></td><td></td></tr>
-            <tr><td>Notes / hidden</td><td><code>[[note]]  /* hidden */  # Act One  = synopsis</code></td><td>Never printed</td></tr>
+            <tr><td>Notes / hidden</td><td><code>[[note]]  /* hidden */  = synopsis</code></td><td>Never printed. Notes on their own line show as yellow notes in Script view.</td></tr>
+            <tr><td>Headings</td><td><code># Title  ## EPISODE 1  ### EXT. ROOF – NIGHT</code></td><td>Markdown headings (e.g. from ChatGPT) are printed, never hidden</td></tr>
           </tbody>
         </table>
         <h3>Keyboard</h3>
@@ -330,14 +335,14 @@
     </defs>
   </svg>
 
-  <script src="vendor/jspdf.umd.min.js?v=20261006-4" defer></script>
-  <script src="js/parser.js?v=20261006-4" defer></script>
-  <script src="js/layout.js?v=20261006-4" defer></script>
-  <script src="js/export.js?v=20261006-4" defer></script>
-  <script src="js/markdown.js?v=20261006-4" defer></script>
-  <script src="js/docx.js?v=20261006-4" defer></script>
-  <script src="js/editor.js?v=20261006-4" defer></script>
-  <script src="js/sample.js?v=20261006-4" defer></script>
-  <script src="js/app.js?v=20261006-4" defer></script>
+  <script src="vendor/jspdf.umd.min.js?v=20261006-5" defer></script>
+  <script src="js/parser.js?v=20261006-5" defer></script>
+  <script src="js/layout.js?v=20261006-5" defer></script>
+  <script src="js/export.js?v=20261006-5" defer></script>
+  <script src="js/markdown.js?v=20261006-5" defer></script>
+  <script src="js/docx.js?v=20261006-5" defer></script>
+  <script src="js/editor.js?v=20261006-5" defer></script>
+  <script src="js/sample.js?v=20261006-5" defer></script>
+  <script src="js/app.js?v=20261006-5" defer></script>
 </body>
 </html>

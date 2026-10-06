@@ -10,7 +10,7 @@
 
   const SF = (root.SF = root.SF || {});
 
-  const TYPES = ['episode', 'scene_heading', 'action', 'character', 'parenthetical', 'dialogue', 'transition', 'centered', 'page_break'];
+  const TYPES = ['episode', 'scene_heading', 'action', 'character', 'parenthetical', 'dialogue', 'transition', 'centered', 'note', 'page_break'];
   const LABELS = {
     episode: 'Episode / New Act',
     scene_heading: 'Scene Heading',
@@ -20,6 +20,7 @@
     dialogue: 'Dialogue',
     transition: 'Transition',
     centered: 'Centered',
+    note: 'Note (not printed)',
     page_break: 'Page Break',
   };
   // Final Draft element flow
@@ -32,6 +33,7 @@
     dialogue: 'action',
     transition: 'scene_heading',
     centered: 'action',
+    note: 'action',
     page_break: 'action',
   };
   const TAB_NEXT = {
@@ -53,6 +55,7 @@
     scene_heading: 'transition',
     episode: 'action',
     centered: 'action',
+    note: 'action',
   };
   const CAPS = new Set(['episode', 'scene_heading', 'character', 'transition']);
 
@@ -112,11 +115,17 @@
         case 'page_break':
           push('page_break', '');
           break;
+        case 'note':
+        case 'synopsis':
+          push('note', t.text);
+          break;
         default:
-          break; // sections / synopses are not represented in script view
+          break;
       }
     });
-    const lost = /\[\[|\/\*/.test(text) || parsed.tokens.some((t) => t.type === 'section' || t.type === 'synopsis');
+    // Only boneyard text and notes buried inside a line or a speech can't be shown as elements
+    const noteTokens = parsed.tokens.filter((t) => t.type === 'note').length;
+    const lost = /\/\*/.test(text) || parsed.notes.some((n) => n.inline) || noteTokens < parsed.notes.length || parsed.tokens.some((t) => t.type === 'section');
     return { titleBlock, els, lost };
   }
 
@@ -219,6 +228,12 @@
         case 'page_break':
           blank();
           emit('===', idx);
+          blank();
+          break;
+        case 'note':
+          if (!t) return;
+          blank();
+          emit(`[[${raw.replace(/\]\]/g, '] ]').replace(/\n+/g, ' ').trim()}]]`, idx);
           blank();
           break;
         default:

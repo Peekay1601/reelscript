@@ -17,6 +17,11 @@
   const NOTE_LABELS = /^(dramatic movement|emotional high|emotional beat|hook|cliffhanger|runtime|duration|timing|target runtime|beat|purpose|note|notes|director'?s note|writer'?s note|logline|summary|synopsis|theme|goal|objective|tone|mood|pacing|music|score note|visual note|why it works|takeaway)$/i;
   const TITLE_NOTE_LABELS = /^(format|genre|runtime|episodes|language|draft|version|duration|based on|logline)$/i;
   const TRANSITION_START = /^(FADE OUT|FADE TO BLACK|FADE TO WHITE|FADE TO|CUT TO BLACK|SMASH CUT|MATCH CUT|JUMP CUT|DISSOLVE TO|CUT TO|INTERCUT|BACK TO)\b/i;
+  const PLAIN_NOTE = /^(dramatic movement|emotional high|emotional beat|how to read this draft|cliffhanger|hook|runtime|target runtime|timing|purpose|logline|director'?s note|writer'?s note)\s*:\s*\S/i;
+  const PLAIN_TITLE_NOTE = /^(format|genre|runtime|episodes|language|draft|version|duration|logline)\s*:\s*(\S.*)$/i;
+  const SLUG_RE = /^(MOMENTS LATER|A MOMENT LATER|LATER|CONTINUOUS|SAME TIME|SERIES OF [^:]+|MONTAGE[^:]*|INTERCUT[^:]*|CLOSE ON [^:.]+|BACK TO [^:.]+|FLASHBACK[^:]*|END FLASHBACK|PRESENT DAY|BACK TO PRESENT|SPLIT SCREEN[^:]*)$/;
+  const PLAIN_COMMENTARY = /^(this is a [\w-]+-led (episode|finale)|the finale is deliberately|these are target runtimes|timing includes performance|each episode includes)/i;
+  const POST_START = /^(what this (episodic )?(version|draft|adaptation)|why this works|key (changes|choices)|notes on|production notes|how to use this|the main adaptation principle|adaptation notes)\b/i;
   const THE_END = /^(THE END|END OF (SERIES|SEASON|EPISODE|FILM|SHOW|PART \w+)|END CREDITS)\.?$/i;
 
   const stripCitations = (s) => s.replace(/\s*\[\d+(?:\s*[,–-]\s*\d+)*\]/g, '').replace(/【[^】]*】/g, '');
@@ -44,7 +49,8 @@
     }).length;
     const rules = lines.filter((l) => /^-{3,}$/.test(l)).length;
     const labels = lines.filter((l) => LABEL.test(l)).length;
-    return mdScene >= 1 || boldOnly >= 3 || (rules >= 1 && (boldOnly >= 1 || labels >= 2));
+    const plainNotes = lines.filter((l) => PLAIN_NOTE.test(l)).length;
+    return mdScene >= 1 || boldOnly >= 3 || (rules >= 1 && (boldOnly >= 1 || labels >= 2)) || plainNotes >= 1;
   }
 
   function cueFrom(text) {
@@ -70,7 +76,8 @@
       .slice(tpCount)
       .map((l) => stripCitations(l.replace(/[ \t]+$/, '').replace(/ /g, ' ')));
     const out = [];
-    const title = { title: [], credit: [], authors: [], source: [], notes: [] };
+    const split = (v) => (v ? v.split('\n').filter(Boolean) : []);
+    const title = { title: split(existing.title), credit: split(existing.credit), authors: split(existing.authors), source: split(existing.source), notes: split(existing.notes) };
     let phase = 'pre'; // pre → script → post
     let notes = 0;
     let episodes = 0;
@@ -94,7 +101,9 @@
 
     for (let i = 0; i < lines.length; i++) {
       const raw = lines[i];
-      const t = raw.trim();
+      let t = raw.trim();
+      // "!**CUT TO BLACK.**" — bold markdown that an editor already forced to action
+      if (/^!(\*\*|__)/.test(t) && wholeBold(t.slice(1))) t = t.slice(1);
 
       if (!t || RULE.test(t)) {
         inCue = false;
@@ -166,6 +175,11 @@
           title.notes.push(`${lm[1].trim()}: ${unwrap(lm[2])}`);
           continue;
         }
+        const pl = PLAIN_TITLE_NOTE.exec(plain);
+        if (pl) {
+          title.notes.push(`${pl[1].trim()}: ${pl[2].trim()}`);
+          continue;
+        }
         if (SF.isSceneHeading(plain) && caps(plain)) {
           phase = 'script';
           i--;
@@ -174,6 +188,16 @@
         if (SF.isEpisode(plain) && !wholeItalic(t)) {
           phase = 'script';
           i--;
+          continue;
+        }
+        // Plain copies (no #): the first short lines are the title and subtitle
+        const short = plain.length <= 80 && !/[.!?]$/.test(plain) && !/:\s/.test(plain);
+        if (short && !title.title.length) {
+          title.title.push(plain);
+          continue;
+        }
+        if (short && !title.source.length && !title.authors.length) {
+          title.source.push(plain);
           continue;
         }
         note(t);
@@ -193,7 +217,12 @@
 
       // ---- Script body ------------------------------------------------------
       const lm = LABEL.exec(t);
-      if (lm && NOTE_LABELS.test(lm[1].trim())) {
+      if ((lm && NOTE_LABELS.test(lm[1].trim())) || PLAIN_NOTE.test(t) || PLAIN_COMMENTARY.test(unwrap(t))) {
+        note(t);
+        continue;
+      }
+      if (!inCue && POST_START.test(unwrap(t))) {
+        phase = 'post';
         note(t);
         continue;
       }
@@ -209,7 +238,7 @@
       if (wholeBold(t)) {
         const u = unwrap(t);
         const cue = cueFrom(u);
-        if (caps(u) && nextNonBlankIsAdjacent(i) && !SF.isSceneHeading(u) && !TRANSITION_START.test(u) && u.length <= 50 && !/[.!?:]$/.test(cue.replace(/\s*\([^)]*\)$/, ''))) {
+        if (caps(u) && nextNonBlankIsAdjacent(i) && !SF.isEpisode(u) && !SF.isSceneHeading(u) && !TRANSITION_START.test(u) && u.length <= 50 && !/[.!?:]$/.test(cue.replace(/\s*\([^)]*\)$/, ''))) {
           blank();
           out.push(cue);
           inCue = true;
@@ -260,12 +289,51 @@
         out.push(t);
         continue;
       }
+      // Already-Fountain lines (forced elements, notes, page breaks) pass through untouched
+      if (/^(!|@|~|\.(?![.\s])|>|\[\[|={3,}$|Title:|Credit:|Author:)/.test(t)) {
+        if (!/^(@|~)/.test(t)) blank();
+        out.push(t);
+        if (/^(\.|>|={3})/.test(t)) blank();
+        continue;
+      }
       // Un-bolded cue: short ALL-CAPS line with speech directly under it
-      if (caps(t) && nextNonBlankIsAdjacent(i) && t.length <= 50 && !SF.isSceneHeading(t) && !TRANSITION_START.test(t) && !/[.!?:]$/.test(cueFrom(t).replace(/\s*\([^)]*\)$/, '')) && !/^[!.>@#~=]/.test(t)) {
+      if (caps(t) && nextNonBlankIsAdjacent(i) && !SF.isEpisode(t) && t.length <= 50 && !SF.isSceneHeading(t) && !TRANSITION_START.test(t) && !/[.!?:]$/.test(cueFrom(t).replace(/\s*\([^)]*\)$/, '')) && !/^[!.>@#~=]/.test(t)) {
         blank();
         out.push(cueFrom(t));
         inCue = true;
         continue;
+      }
+      if (caps(t) && !nextNonBlankIsAdjacent(i)) {
+        const up = t.toUpperCase();
+        if (SF.isEpisode(t) && !SF.isSceneHeading(t)) {
+          blank();
+          out.push(t);
+          blank();
+          continue;
+        }
+        if (THE_END.test(t)) {
+          blank();
+          out.push(`> ${up} <`);
+          blank();
+          continue;
+        }
+        if (/^(FADE|CUT TO|SMASH CUT|MATCH CUT|JUMP CUT|DISSOLVE)/.test(t)) {
+          blank();
+          out.push(SF.isTransition(up) ? up : '> ' + up);
+          blank();
+          continue;
+        }
+        if (SLUG_RE.test(t.replace(/\s+[—–-]+\s+.*$/, '').trim()) || SLUG_RE.test(t)) {
+          blank();
+          out.push('.' + up);
+          blank();
+          continue;
+        }
+        if (!SF.isSceneHeading(t)) {
+          blank();
+          out.push('!' + t);
+          continue;
+        }
       }
       // Plain script lines (action, inline-formatted lines)
       const first = out[out.length - 1];

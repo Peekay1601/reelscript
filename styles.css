@@ -218,6 +218,22 @@ a { color: var(--accent-2); }
 }
 #editor::selection { background: rgba(124, 92, 255, .35); }
 
+/* Fountain view: transparent textarea over a highlighted copy of the text */
+.fv-wrap { position: absolute; inset: 0; background: var(--bg); }
+.fv-wrap #editor { background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--accent-2); }
+.fv-wrap #editor::placeholder { color: var(--text-faint); -webkit-text-fill-color: var(--text-faint); }
+.fv-hl { position: absolute; left: 0; top: 0; overflow: hidden; pointer-events: none; box-sizing: border-box; }
+.fv-hl-inner { white-space: pre-wrap; overflow-wrap: break-word; word-wrap: break-word; color: var(--text); font: inherit; }
+.fl-title_page { color: var(--text-dim); }
+.fl-episode { font-weight: 700; text-decoration: underline; color: var(--accent-2); }
+.fl-scene_heading { font-weight: 700; color: var(--text); }
+.fl-character { color: var(--accent-2); }
+.bold-cues .fl-character { font-weight: 700; }
+.fl-parenthetical { color: var(--text-dim); }
+.fl-transition, .fl-centered { color: var(--text-dim); font-weight: 700; }
+.fl-note, .fl-synopsis { color: #b08a1c; background: rgba(230, 180, 34, .14); }
+.fl-section { color: var(--text-dim); }
+
 .welcome {
   position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; overflow-y: auto;
   background: radial-gradient(800px 400px at 50% 0%, rgba(124, 92, 255, .14), transparent 70%), var(--bg);
@@ -426,6 +442,14 @@ kbd { font: 12px var(--sans); padding: 1px 6px; border-radius: 5px; border: 1px 
 .sp-el[data-t='transition'] { text-align: right; text-transform: uppercase; }
 .sp-el[data-t='centered'] { text-align: center; }
 .sp-el[data-t='episode'] { text-align: center; text-transform: uppercase; font-weight: 700; text-decoration: underline; margin-top: calc(3in / 6); }
+.sp-el[data-t='note'] {
+  width: 60ch; padding: 2px 8px; margin-left: -8px; border-left: 3px solid #e6b422; border-radius: 3px;
+  background: #fff6d5; color: #6b5200; font-style: italic;
+}
+.sp-el[data-t='note']::after {
+  content: 'NOTE · not printed'; position: absolute; right: -0.9in; top: 2px; font: 600 8.5px/1.4 var(--sans);
+  font-style: normal; letter-spacing: .05em; color: #b08a1c;
+}
 .sp-el[data-t='page_break'] { min-height: 0; height: 0; margin: calc(1in / 6) 0; border-top: 2px dashed #c9c9d6; user-select: none; }
 .sp-el[data-t='page_break']::after {
   content: 'PAGE BREAK'; position: absolute; left: 50%; top: -0.75em; transform: translateX(-50%);

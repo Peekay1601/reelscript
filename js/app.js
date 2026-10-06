@@ -9,6 +9,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const STORE_KEY = 'reelscript.v1';
+  const APP_VERSION = '20261006-5'; // keep in sync with version.json and the ?v= tags in index.html
   const ELEMENT_LABELS = {
     episode: 'Episode',
     scene_heading: 'Scene heading',
@@ -19,6 +20,7 @@
     lyrics: 'Lyrics',
     transition: 'Transition',
     centered: 'Centered',
+    note: 'Note (not printed)',
     page_break: 'Page break',
     section: 'Section',
     synopsis: 'Synopsis',
@@ -40,7 +42,10 @@
   let model = null;
   let se = null; // Final Draft–style script editor
   let linePage = new Map(); // fountain line → printed page
-  const isScript = () => state.prefs.editorMode === 'script';
+  // The user's chosen editor lives in prefs.editorMode; activeMode can differ for one script
+  // (e.g. one with /* hidden */ text opens in Fountain view) without changing that choice.
+  let activeMode = 'script';
+  const isScript = () => activeMode === 'script';
 
   /** Current Fountain source, whichever editor is active. */
   function content() {
@@ -533,7 +538,7 @@
     if (isScript()) {
       se.markPages(model);
       se.setPageStyle(model, s.settings);
-    }
+    } else updateHighlight();
     renderStats();
     renderOutline();
     updateStatus();
@@ -545,12 +550,44 @@
   }
 
   function onInput() {
+    updateHighlight();
     const s = current();
     s.content = ed().value;
     s.updatedAt = now();
     updateWelcome();
     scheduleRender();
     schedulePersist();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fountain view highlighting (bold speaker names, headings, notes…)
+  // ---------------------------------------------------------------------------
+  function syncHighlightBox() {
+    const ta = ed();
+    const hl = $('#fv-hl');
+    const cs = getComputedStyle(ta);
+    hl.style.width = ta.clientWidth + 'px';
+    hl.style.height = ta.clientHeight + 'px';
+    ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'wordSpacing', 'tabSize'].forEach((p) => (hl.style[p] = cs[p]));
+    $('#fv-hl-inner').style.transform = `translateY(${-ta.scrollTop}px)`;
+  }
+
+  function updateHighlight() {
+    if (isScript()) return;
+    const ta = ed();
+    const inner = $('#fv-hl-inner');
+    const s = current();
+    inner.classList.toggle('bold-cues', !s || s.settings.boldCharacterNames !== false);
+    const lines = ta.value.split('\n');
+    inner.innerHTML =
+      lines
+        .map((l, i) => {
+          if (!l) return '';
+          const t = lineTypes[i] || 'action';
+          return `<span class="fl-${t}">${esc(l)}</span>`;
+        })
+        .join('\n') + '\n';
+    syncHighlightBox();
   }
 
   // ---------------------------------------------------------------------------
@@ -683,16 +720,25 @@
     state.currentId = id;
     welcomeDismissed = false;
     const s = current();
+    let convertedFrom = null;
+    if (SF.looksMarkdown(s.content)) {
+      // Saved before ChatGPT conversion existed: convert the original text once (Undo restores it)
+      convertedFrom = s.content;
+      s.content = SF.convertPasted(s.content).text;
+      s.updatedAt = now();
+    }
     ed().value = s.content;
     ed().setSelectionRange(0, 0);
     ed().scrollTop = 0;
+    activeMode = state.prefs.editorMode;
+    applyMode();
     if (isScript()) {
       const { lost } = SF.editorFromFountain(s.content);
       if (lost) {
-        // Notes / sections / boneyard only exist in Fountain — don't silently drop them
-        state.prefs.editorMode = 'text';
+        // Boneyard / notes inside lines only exist in Fountain — don't silently drop them
+        activeMode = 'text';
         applyMode();
-        toast('This script has [[notes]] or sections, so it opened in Fountain view.');
+        toast('This script has /* hidden */ text or notes inside lines, so it opened in Fountain view.');
       } else {
         se.load(s.content);
         $('#script-host').scrollTop = 0;
@@ -706,11 +752,18 @@
     render();
     persist();
     closeSidebar();
-    if (SF.looksMarkdown(s.content)) {
-      // Saved before ChatGPT conversion existed: convert now (Undo is offered in the toast)
-      setTimeout(() => {
-        if (current() === s && SF.looksMarkdown(content())) runCleanup();
-      }, 150);
+    if (convertedFrom) {
+      autoName();
+      setTimeout(
+        () =>
+          toast('Converted this script from ChatGPT formatting', {
+            label: 'Undo',
+            run: () => {
+              if (current() === s) setContent(convertedFrom);
+            },
+          }, 10000),
+        200
+      );
     }
   }
 
@@ -956,21 +1009,21 @@
   // ---------------------------------------------------------------------------
   function applyMode() {
     const script = isScript();
-    $('#app').dataset.mode = state.prefs.editorMode;
+    $('#app').dataset.mode = activeMode;
     $('#script-host').hidden = !script;
-    ed().hidden = script;
-    $$('.mode-switch button').forEach((b) => b.classList.toggle('active', b.dataset.mode === state.prefs.editorMode));
+    $('#fv-wrap').hidden = script;
+    $$('.mode-switch button').forEach((b) => b.classList.toggle('active', b.dataset.mode === activeMode));
   }
 
   async function setMode(mode, silent) {
-    if (mode === state.prefs.editorMode) return;
+    if (mode === activeMode) return;
     if (mode === 'script') {
       const text = ed().value;
       const { lost } = SF.editorFromFountain(text);
       if (lost && !silent) {
         const v = await confirmDialog({
           title: 'Switch to Script view?',
-          text: 'Script view shows printable elements only. [[Notes]], /* hidden text */, # sections and = synopses in this script will be removed once you edit it there. Export a .fountain copy first if you need them.',
+          text: 'This script has /* hidden text */ or [[notes]] in the middle of a line or speech. Script view can only keep notes that sit on their own line, so these will be removed once you edit there. Export a .fountain copy first if you need them.',
           buttons: [
             { label: 'Stay in Fountain', value: 'cancel' },
             { label: 'Switch anyway', value: 'ok', cls: 'btn-primary' },
@@ -978,12 +1031,17 @@
         });
         if (v !== 'ok') return;
       }
-      state.prefs.editorMode = 'script';
+      activeMode = 'script';
       se.load(text);
     } else {
       const text = se.sync();
-      state.prefs.editorMode = 'text';
+      activeMode = 'text';
       ed().value = text;
+      updateHighlight();
+    }
+    if (!silent) {
+      state.prefs.editorMode = activeMode;
+      state.prefs.modeChosen = true;
     }
     applyMode();
     render();
@@ -1118,6 +1176,7 @@
       afterCaretMove();
     });
     ta.addEventListener('keydown', onEditorKey);
+    ta.addEventListener('scroll', () => ($('#fv-hl-inner').style.transform = `translateY(${-ta.scrollTop}px)`));
     ['keyup', 'click', 'focus'].forEach((ev) => ta.addEventListener(ev, afterCaretMove));
     ta.addEventListener('paste', (e) => {
       const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
@@ -1232,7 +1291,6 @@
       if (!text.trim()) return;
       welcomeDismissed = true;
       const conv = SF.convertPasted(text, { keepNotes: $('#paste-keep-notes').checked });
-      if (/\[\[/.test(conv.text) && isScript()) setMode('text', true); // notes live in Fountain view
       setContent(conv.text);
       autoName();
       toast(conv.info || 'Cleaned up — check the preview →', null, 6000);
@@ -1326,6 +1384,7 @@
       cancelAnimationFrame(resizeRaf);
       resizeRaf = requestAnimationFrame(() => {
         applyZoom();
+        if (!isScript()) syncHighlightBox();
         setView(state.prefs.view);
       });
     });
@@ -1351,12 +1410,38 @@
     setInterval(renderList, 60000);
   }
 
+  /** GitHub Pages caches pages for ~10 minutes: if a newer version is live, reload into it. */
+  function checkForUpdate() {
+    if (!window.fetch || location.protocol === 'file:') return;
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j || !j.version || j.version === APP_VERSION) return;
+        let tried = null;
+        try {
+          tried = sessionStorage.getItem('reelscript.updatedTo');
+          sessionStorage.setItem('reelscript.updatedTo', j.version);
+        } catch (e) {
+          /* ignore */
+        }
+        if (tried === j.version) return; // already tried once this session
+        persist();
+        fetch(location.pathname, { cache: 'reload' })
+          .catch(() => null)
+          .then(() => location.reload());
+      })
+      .catch(() => null);
+  }
+
   function init() {
     if (!SF || !SF.layout) {
       document.body.innerHTML = '<p style="padding:24px">ReelScript failed to load. Please refresh the page.</p>';
       return;
     }
     load();
+    // Earlier versions could leave Fountain view stuck on after opening one script with notes
+    if (!state.prefs.modeChosen) state.prefs.editorMode = 'script';
+    activeMode = state.prefs.editorMode;
     applyTheme();
     se = new SF.ScriptEditor($('#script-host'), {
       onChange: onScriptChange,
@@ -1372,6 +1457,11 @@
     setView(state.prefs.view);
     toggleOutline(state.prefs.outlineOpen);
     openScript(state.currentId);
+    $('#app-version').textContent = 'Version ' + APP_VERSION;
+    checkForUpdate();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForUpdate();
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

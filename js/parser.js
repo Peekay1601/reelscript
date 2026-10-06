@@ -67,7 +67,7 @@
   function stripNotes(src, notes) {
     return src.replace(/\[\[([\s\S]*?)\]\]/g, (m, body, offset) => {
       notes.push({ text: body.trim(), offset });
-      return NOTE_SENTINEL + m.replace(/[^\n]/g, '');
+      return NOTE_SENTINEL + (notes.length - 1) + '\u0002' + m.replace(/[^\n]/g, '');
     });
   }
 
@@ -106,11 +106,21 @@
   function parse(src) {
     const notes = [];
     const text = stripNotes(stripBoneyard(normalize(src)), notes);
-    const allLines = text.split('\n').map((l) => {
+    const noteOnly = {}; // line index → note indexes, for lines that hold nothing but notes
+    const allLines = text.split('\n').map((l, idx) => {
       if (!l.includes(NOTE_SENTINEL)) return l;
-      const cleaned = l.split(NOTE_SENTINEL).join('');
+      const ids = [];
+      const cleaned = l.replace(/\u0001(\d+)\u0002/g, (m, n) => {
+        ids.push(+n);
+        return '';
+      });
       // A line that only held a note disappears instead of becoming a blank separator.
-      return cleaned.trim() === '' ? null : cleaned.replace(/\s{2,}/g, ' ');
+      if (cleaned.trim() === '') {
+        noteOnly[idx] = ids;
+        return null;
+      }
+      ids.forEach((n) => (notes[n].inline = true));
+      return cleaned.replace(/\s{2,}/g, ' ');
     });
 
     const { fields, lineCount } = parseTitlePage(allLines.map((l) => (l === null ? '' : l)));
@@ -138,7 +148,11 @@
 
     for (let i = lineCount; i < lines.length; i++) {
       const raw = lines[i];
-      if (raw === null || isBlank(raw)) continue;
+      if (raw === null) {
+        if (noteOnly[i]) noteOnly[i].forEach((n) => tokens.push({ type: 'note', text: notes[n].text, line: i }));
+        continue;
+      }
+      if (isBlank(raw)) continue;
       const line = raw.trim();
       const prevBlank = prevBlankAt(i);
       const nextBlank = nextBlankAt(i);

@@ -356,6 +356,39 @@ test('character names are bold by default (and optional)', () => {
   assert.ok(SF.toFDX(src).includes('<Paragraph Type="Character"><Text Style="Bold">BOB</Text>'));
 });
 
+test('ChatGPT text copied as plain text (no # or **) converts the same way', () => {
+  const plain = CHATGPT.split('\n')
+    .map((l) => l.replace(/^#{1,6}\s+/, '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/^\*(\S.*\S)\*$/, '$1').replace(/^-{3,}$/, '').replace(/^- /, '').replace(/\s+$/, ''))
+    .join('\n');
+  assert.ok(SF.looksMarkdown(plain));
+  const p = SF.parse(SF.convertPasted(plain).text);
+  assert.deepStrictEqual(p.title.title, ['YOUR TURN, THEN MINE']);
+  assert.deepStrictEqual(p.title.authors, ['KODATI PAVAN KALYAN']);
+  assert.deepStrictEqual(p.tokens.filter((t) => t.type === 'episode').map((t) => t.text), ['EPISODE 01 — “NOT WITHOUT YOU”']);
+  assert.deepStrictEqual(p.tokens.filter((t) => t.type === 'dialogue').map((t) => t.character), ['KARTHIK', 'KARTHIK (O.S.)']);
+  assert.deepStrictEqual(p.tokens.filter((t) => t.type === 'scene_heading').map((t) => t.text), ['EXT. NEIGHBOURHOOD STAGE, RAJAHMUNDRY – NIGHT', 'MOMENTS LATER']);
+  const txt = SF.convertPasted(plain).text;
+  assert.ok(!/Dramatic movement|Emotional high|strongest hook|protects|performance-led/.test(txt), txt);
+});
+
+test('converting already-converted text changes nothing (no double markers)', () => {
+  const once = SF.convertPasted(CHATGPT).text;
+  assert.strictEqual(SF.cleanup(once), once);
+  const { titleBlock, els } = SF.editorFromFountain(CHATGPT);
+  const again = SF.convertPasted(SF.editorToFountain(titleBlock, els).text).text;
+  assert.ok(!/^(!\.|!!|!>|\.\.|!\*\*)/m.test(again), again);
+});
+
+test('notes on their own line become note elements in Script view and round-trip', () => {
+  const src = 'INT. A - DAY\n\n[[Dramatic movement: x]]\n\nHi.\n';
+  const { els, lost } = SF.editorFromFountain(src);
+  assert.strictEqual(lost, false);
+  assert.deepStrictEqual(els.map((e) => e.type), ['scene_heading', 'note', 'action']);
+  const back = SF.editorToFountain('', els).text;
+  assert.ok(back.includes('[[Dramatic movement: x]]'));
+  assert.ok(!SF.layout(back).pages[0].items.some((i) => /Dramatic/.test(lineText(i))));
+});
+
 // ---------------------------------------------------------------- docx
 test('DOCX is a valid zip with screenplay styles', () => {
   const bytes = SF.buildDOCX(SF.SAMPLE, {}, { title: 'T' });
