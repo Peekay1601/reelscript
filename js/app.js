@@ -814,7 +814,7 @@
         toast('Word export failed.');
       }
     } else if (kind === 'fdx') {
-      download(`${base}.fdx`, SF.toFDX(s.content), 'application/xml;charset=utf-8');
+      download(`${base}.fdx`, SF.toFDX(s.content, s.settings), 'application/xml;charset=utf-8');
       toast('Final Draft file downloaded');
     } else if (kind === 'print') {
       clearTimeout(renderTimer);

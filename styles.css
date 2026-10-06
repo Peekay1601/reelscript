@@ -419,6 +419,7 @@ kbd { font: 12px var(--sans); padding: 1px 6px; border-radius: 5px; border: 1px 
 .sp-el[data-t='scene_heading'] { text-transform: uppercase; margin-top: calc(var(--sp-scene-before, 2) * 1in / 6); }
 .sp-bold-scenes .sp-el[data-t='scene_heading'] { font-weight: 700; }
 .sp-ul-scenes .sp-el[data-t='scene_heading'] { text-decoration: underline; }
+.sp-bold-cues .sp-el[data-t='character'] { font-weight: 700; }
 .sp-el[data-t='character'] { --ml: 22ch; margin-left: 22ch; width: 38ch; text-transform: uppercase; }
 .sp-el[data-t='parenthetical'] { --ml: 16ch; margin-left: 16ch; width: 25ch; margin-top: 0; padding-left: 1ch; text-indent: -1ch; }
 .sp-el[data-t='dialogue'] { --ml: 10ch; margin-left: 10ch; width: 35ch; margin-top: 0; }

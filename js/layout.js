@@ -40,6 +40,7 @@
     pageSize: 'letter',
     sceneNumbers: 'none', // none | left | right | both
     boldSceneHeadings: false,
+    boldCharacterNames: true,
     underlineSceneHeadings: false,
     doubleSpaceSceneHeadings: true,
     autoContd: true,
@@ -138,9 +139,9 @@
   const CONTD = " (CONT'D)";
   const baseName = (n) => SF.plainText(n).replace(/\(.*?\)/g, '').replace(/\^/g, '').trim().toUpperCase();
 
-  function dialogueLines(block, geo, name) {
+  function dialogueLines(block, geo, name, opts) {
     const lines = [];
-    const cue = wrapText(block.forced ? name : upper(name), geo.character.width);
+    const cue = wrapText(block.forced ? name : upper(name), geo.character.width, opts && opts.boldCharacterNames ? { b: true } : null);
     cue.forEach((runs) => lines.push({ kind: 'character', segs: [seg(geo.character.x, runs)], src: block.line }));
     block.parts.forEach((p) => {
       const g = geo[p.type];
@@ -206,13 +207,13 @@
         }
         case 'dialogue': {
           const name = speakerName(t);
-          blocks.push({ kind: 'dialogue', lines: dialogueLines(t, EL, name), spaceBefore: 1, splittable: true, character: baseName(t.character) });
+          blocks.push({ kind: 'dialogue', lines: dialogueLines(t, EL, name, opts), spaceBefore: 1, splittable: true, character: baseName(t.character) });
           break;
         }
         case 'dual_dialogue': {
           lastSpeaker = null;
-          const L = dialogueLines(t.left, DUAL.left, t.left.character);
-          const R = dialogueLines(t.right, DUAL.right, t.right.character);
+          const L = dialogueLines(t.left, DUAL.left, t.left.character, opts);
+          const R = dialogueLines(t.right, DUAL.right, t.right.character, opts);
           const n = Math.max(L.length, R.length);
           const lines = [];
           for (let k = 0; k < n; k++) {
@@ -314,7 +315,7 @@
     const cueX = cue.segs[0].x;
     const more = { kind: 'more', segs: [seg(cueX, [{ text: '(MORE)', b: false, i: false, u: false }])], src: b.lines[k - 1].src };
     const cueText = cue.segs[0].runs.map((r) => r.text).join('');
-    const contdRuns = /CONT['’]?D/i.test(cueText) ? cue.segs[0].runs : [...cue.segs[0].runs, { text: CONTD, b: false, i: false, u: false }];
+    const contdRuns = /CONT['’]?D/i.test(cueText) ? cue.segs[0].runs : [...cue.segs[0].runs, { text: CONTD, b: !!(cue.segs[0].runs[0] && cue.segs[0].runs[0].b), i: false, u: false }];
     const contCue = { kind: 'character', segs: [seg(cueX, contdRuns)], src: cue.src };
     return [
       { ...b, lines: [...b.lines.slice(0, k), more] },

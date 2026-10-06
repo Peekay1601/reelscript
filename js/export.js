@@ -128,7 +128,8 @@
       .join('');
   }
 
-  function toFDX(src) {
+  function toFDX(src, options) {
+    const opts = Object.assign({}, SF.LAYOUT_DEFAULTS, options || {});
     const parsed = SF.parse(src);
     const out = [];
     let newPage = false;
@@ -141,7 +142,7 @@
       return `    <Paragraph Type="${type}"${a}>${fdxText(text, extra)}</Paragraph>`;
     };
     const dialogue = (d) => {
-      const rows = [para('Character', d.character)];
+      const rows = [para('Character', d.character, '', opts.boldCharacterNames ? { b: true } : null)];
       d.parts.forEach((p) => {
         if (p.type === 'parenthetical') rows.push(para('Parenthetical', p.text));
         else rows.push(para('Dialogue', p.text, '', p.type === 'lyrics' ? { i: true } : null));

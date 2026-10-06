@@ -1116,6 +1116,7 @@
       this.paper.style.setProperty('--sp-scene-before', opts.doubleSpaceSceneHeadings ? 2 : 1);
       this.paper.classList.toggle('sp-bold-scenes', !!opts.boldSceneHeadings);
       this.paper.classList.toggle('sp-ul-scenes', !!opts.underlineSceneHeadings);
+      this.paper.classList.toggle('sp-bold-cues', !!opts.boldCharacterNames);
     }
   }
 

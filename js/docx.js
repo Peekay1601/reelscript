@@ -149,7 +149,7 @@
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:pPr><w:widowControl/></w:pPr></w:style>
 ${styleDef('SceneHeading', 'Scene Heading', sp(sceneBefore) + '<w:keepNext/><w:keepLines/>', sceneRpr)}
 ${styleDef('Action', 'Action', sp(1))}
-${styleDef('Character', 'Character', sp(1) + '<w:keepNext/><w:keepLines/>' + ind(2.2, 0), '<w:caps/>')}
+${styleDef('Character', 'Character', sp(1) + '<w:keepNext/><w:keepLines/>' + ind(2.2, 0), '<w:caps/>' + (opts.boldCharacterNames ? '<w:b/><w:bCs/>' : ''))}
 ${styleDef('Parenthetical', 'Parenthetical', sp(0) + '<w:keepNext/>' + `<w:ind w:left="${1.6 * TW}" w:right="${1.9 * TW}" w:hanging="${0.1 * TW}"/>`)}
 ${styleDef('Dialogue', 'Dialogue', sp(0) + ind(1.0, 1.5))}
 ${styleDef('Transition', 'Transition', sp(1) + '<w:jc w:val="right"/>', '<w:caps/>')}

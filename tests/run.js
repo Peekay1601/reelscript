@@ -342,6 +342,20 @@ test('no # line ever disappears, even unconverted', () => {
   ['EPISODE 3', 'MOMENTS LATER', 'What this protects'].forEach((w) => assert.ok(fdx.includes(w), 'fdx ' + w));
 });
 
+test('character names are bold by default (and optional)', () => {
+  const src = 'INT. A - DAY\n\nBOB\nHi.\n\nALICE\nHey.\n\nBOB ^\nYo.\n';
+  const cues = (m) => body(m, 0).filter((i) => i.kind === 'character' || i.kind === 'dual');
+  const dualCueLine = cues(SF.layout(src)).find((i) => i.kind === 'dual');
+  assert.ok(dualCueLine.segs.every((sg) => sg.runs.every((r) => r.b)), 'dual cues bold');
+  assert.ok(body(SF.layout(src), 0).filter((i) => i.kind === 'character').every((i) => i.segs[0].runs.every((r) => r.b)));
+  assert.ok(body(SF.layout(src, { boldCharacterNames: false }), 0).filter((i) => i.kind === 'character').every((i) => i.segs[0].runs.every((r) => !r.b)));
+  const speech = Array.from({ length: 80 }, (_, k) => `Sentence number ${k} is right here.`).join(' ');
+  const m = SF.layout(`BOB\n${speech}\n`);
+  assert.ok(body(m, 1)[0].segs[0].runs.every((r) => r.b), "CONT'D cue bold too");
+  assert.ok(Buffer.from(SF.buildDOCX(src, {})).toString('utf8').includes('<w:caps/><w:b/><w:bCs/>'));
+  assert.ok(SF.toFDX(src).includes('<Paragraph Type="Character"><Text Style="Bold">BOB</Text>'));
+});
+
 // ---------------------------------------------------------------- docx
 test('DOCX is a valid zip with screenplay styles', () => {
   const bytes = SF.buildDOCX(SF.SAMPLE, {}, { title: 'T' });
