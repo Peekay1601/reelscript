@@ -38,6 +38,7 @@
 
   const DEFAULTS = {
     pageSize: 'letter',
+    font: 'courier-prime', // courier-prime | courier
     sceneNumbers: 'none', // none | left | right | both
     boldSceneHeadings: true,
     boldCharacterNames: true,
@@ -51,6 +52,29 @@
     episodeNewPage: true,
     restartSceneNumbers: true,
   };
+
+  // Formatting styles of popular screenwriting apps (their default PDF output).
+  const STYLE_PRESETS = {
+    reelscript: { label: 'ReelScript', hint: 'Bold scene headings and character names, Courier Prime', font: 'courier-prime', boldSceneHeadings: true, boldCharacterNames: true, underlineSceneHeadings: false, doubleSpaceSceneHeadings: true, autoContd: true },
+    finaldraft: { label: 'Final Draft', hint: 'Plain caps scene headings, 2 lines before each, Courier', font: 'courier', boldSceneHeadings: false, boldCharacterNames: false, underlineSceneHeadings: false, doubleSpaceSceneHeadings: true, autoContd: true },
+    highland: { label: 'Highland 2', hint: 'Bold scene headings, Courier Prime', font: 'courier-prime', boldSceneHeadings: true, boldCharacterNames: false, underlineSceneHeadings: false, doubleSpaceSceneHeadings: false, autoContd: true },
+    celtx: { label: 'Celtx', hint: 'Plain caps scene headings, single line before each, Courier', font: 'courier', boldSceneHeadings: false, boldCharacterNames: false, underlineSceneHeadings: false, doubleSpaceSceneHeadings: false, autoContd: true },
+  };
+  const PRESET_KEYS = ['font', 'boldSceneHeadings', 'boldCharacterNames', 'underlineSceneHeadings', 'doubleSpaceSceneHeadings', 'autoContd'];
+
+  /** Which preset do these settings match? ('custom' if none) */
+  function detectStyle(settings) {
+    const s = Object.assign({}, DEFAULTS, settings || {});
+    const hit = Object.keys(STYLE_PRESETS).find((k) => PRESET_KEYS.every((p) => STYLE_PRESETS[k][p] === s[p]));
+    return hit || 'custom';
+  }
+
+  function applyStyle(settings, key) {
+    const p = STYLE_PRESETS[key];
+    if (!p) return settings;
+    PRESET_KEYS.forEach((k) => (settings[k] = p[k]));
+    return settings;
+  }
 
   // --------------------------------------------------------------------------
   // Text → styled chars → wrapped lines → runs
@@ -536,5 +560,5 @@
     };
   }
 
-  Object.assign(SF, { layout, PAGE_SIZES, LAYOUT_DEFAULTS: DEFAULTS, LINE_HEIGHT: LH, CHAR_WIDTH: CW, wrapText });
+  Object.assign(SF, { STYLE_PRESETS, PRESET_KEYS, detectStyle, applyStyle, layout, PAGE_SIZES, LAYOUT_DEFAULTS: DEFAULTS, LINE_HEIGHT: LH, CHAR_WIDTH: CW, wrapText });
 })(typeof window !== 'undefined' ? window : globalThis);

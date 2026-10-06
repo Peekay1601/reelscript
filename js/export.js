@@ -19,6 +19,20 @@
     '…': '...', ' ': ' ', '•': '*', '™': '(TM)',
   };
 
+  // Courier Prime (embedded) covers Latin + common punctuation, so curly quotes and dashes survive
+  function primeSafe(text, bad) {
+    let out = '';
+    for (const ch of text) {
+      const c = ch.codePointAt(0);
+      if (c <= 0x024f || (c >= 0x2010 && c <= 0x203a) || c === 0x20ac || c === 0x2122 || c === 0x00a0) out += ch === '\u00a0' ? ' ' : ch;
+      else {
+        if (bad) bad.add(ch);
+        out += '?';
+      }
+    }
+    return out;
+  }
+
   function pdfSafe(text, bad) {
     let out = '';
     for (const ch of text) {
@@ -39,7 +53,8 @@
   /** Characters the built-in PDF Courier font can't draw (e.g. Devanagari, Telugu, emoji). */
   function unsupportedChars(model) {
     const bad = new Set();
-    allPages(model).forEach((p) => p.items.forEach((it) => it.segs.forEach((s) => s.runs.forEach((r) => pdfSafe(r.text, bad)))));
+    const safe = model.options.font === 'courier-prime' ? primeSafe : pdfSafe;
+    allPages(model).forEach((p) => p.items.forEach((it) => it.segs.forEach((s) => s.runs.forEach((r) => safe(r.text, bad)))));
     return [...bad];
   }
 
@@ -50,7 +65,10 @@
     return 'normal';
   }
 
-  function buildPDF(model, meta) {
+  /**
+   * @param fonts optional {normal,bold,italic,bolditalic} base64 TTF data for Courier Prime
+   */
+  function buildPDF(model, meta, fonts) {
     const JsPDF = root.jspdf && root.jspdf.jsPDF;
     if (!JsPDF) throw new Error('PDF engine failed to load.');
     const { w, h } = model.size;
@@ -61,6 +79,17 @@
       subject: 'Screenplay',
       creator: 'ReelScript Screenplay Formatter',
     });
+    let family = 'courier';
+    let safe = pdfSafe;
+    if (model.options.font === 'courier-prime' && fonts && fonts.normal) {
+      const files = { normal: 'CourierPrime-Regular.ttf', bold: 'CourierPrime-Bold.ttf', italic: 'CourierPrime-Italic.ttf', bolditalic: 'CourierPrime-BoldItalic.ttf' };
+      Object.keys(files).forEach((st) => {
+        doc.addFileToVFS(files[st], fonts[st]);
+        doc.addFont(files[st], 'CourierPrime', st);
+      });
+      family = 'CourierPrime';
+      safe = primeSafe;
+    }
     doc.setFontSize(12);
     doc.setLineWidth(0.01);
     doc.setTextColor(0, 0, 0);
@@ -73,9 +102,9 @@
         it.segs.forEach((s) => {
           let x = s.x;
           s.runs.forEach((r) => {
-            const t = pdfSafe(r.text);
+            const t = safe(r.text);
             if (!t) return;
-            doc.setFont('courier', fontStyle(r));
+            doc.setFont(family, fontStyle(r));
             doc.text(t, x, base);
             const width = [...t].length * SF.CHAR_WIDTH;
             if (r.u) doc.line(x, base + 0.025, x + width, base + 0.025);
@@ -351,5 +380,5 @@
     return (title ? title + '\n\n' : '') + body + '\n';
   }
 
-  Object.assign(SF, { buildPDF, unsupportedChars, toFDX, fromFDX, pdfSafe });
+  Object.assign(SF, { buildPDF, unsupportedChars, toFDX, fromFDX, pdfSafe, primeSafe });
 })(typeof window !== 'undefined' ? window : globalThis);

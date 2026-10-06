@@ -9,7 +9,8 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const STORE_KEY = 'reelscript.v1';
-  const APP_VERSION = '20261006-6'; // keep in sync with version.json and the ?v= tags in index.html
+  const APP_VERSION = '20261006-7';
+  SF.APP_VERSION = APP_VERSION; // keep in sync with version.json and the ?v= tags in index.html
   const ELEMENT_LABELS = {
     episode: 'Episode',
     scene_heading: 'Scene heading',
@@ -545,6 +546,7 @@
     linePage = new Map();
     model.pages.forEach((p) => p.items.forEach((it) => it.src != null && !linePage.has(it.src) && linePage.set(it.src, p.number)));
     renderPages();
+    syncStyleUi();
     if (isScript()) {
       se.markPages(model);
       se.setPageStyle(model, s.settings);
@@ -828,34 +830,68 @@
     return indented >= 3 || chat >= 2 || artefacts || tight || SF.looksMarkdown(text);
   }
 
-  function importFile(file) {
+  const SOURCE_STYLE = { 'Final Draft': 'finaldraft', 'Highland 2': 'highland', Celtx: 'celtx' };
+
+  async function importFile(file) {
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast('That file is larger than 5 MB — is it really a script?');
+    toast(`Importing “${file.name}”…`, null, 20000);
+    let res;
+    try {
+      res = await SF.importFile(file);
+    } catch (e) {
+      console.error(e);
+      toast(e.message || 'Could not import that file.', null, 8000);
       return;
     }
-    const reader = new FileReader();
-    reader.onerror = () => toast('Could not read that file.');
-    reader.onload = () => {
-      let text = String(reader.result || '');
-      const name = file.name.replace(/\.[^.]+$/, '') || 'Imported script';
-      try {
-        if (/\.fdx$/i.test(file.name) || /<FinalDraft[\s>]/.test(text.slice(0, 2000))) text = SF.fromFDX(text);
-      } catch (e) {
-        toast(e.message || 'Could not read that Final Draft file.');
-        return;
-      }
-      if (SF.looksMarkdown(text)) {
-        const conv = SF.convertPasted(text);
-        createScript(name, conv.text);
-        toast(conv.info, null, 6000);
-        return;
-      }
-      createScript(name, SF.normalize(text));
-      if (looksMessy(text)) toast('This looks like pasted or exported text.', { label: 'Smart clean-up', run: runCleanup });
-      else toast(`Imported “${name}”`);
-    };
-    reader.readAsText(file);
+    const s = createScript(res.name, res.text);
+    autoName();
+    const style = SOURCE_STYLE[res.source];
+    if (style && SF.detectStyle(s.settings) !== style) {
+      const label = SF.STYLE_PRESETS[style].label;
+      toast(res.info || `Imported “${res.name}”`, { label: `Use ${label} style`, run: () => setStyle(style) }, 12000);
+    } else if (!res.info && looksMessy(res.text)) {
+      toast('This looks like pasted or exported text.', { label: 'Smart clean-up', run: runCleanup });
+    } else toast(res.info || `Imported “${res.name}”`, null, 7000);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Formatting styles (Final Draft / Highland 2 / Celtx / ReelScript)
+  // ---------------------------------------------------------------------------
+  function syncStyleUi() {
+    const s = current();
+    if (!s) return;
+    const key = SF.detectStyle(s.settings);
+    $('#style-select').value = key;
+    $('#pages').classList.toggle('font-courier', s.settings.font === 'courier');
+    if (se) se.paper.classList.toggle('font-courier', s.settings.font === 'courier');
+  }
+
+  function setStyle(key) {
+    const s = current();
+    if (!SF.STYLE_PRESETS[key]) return;
+    SF.applyStyle(s.settings, key);
+    s.updatedAt = now();
+    render();
+    persist();
+    toast(`${SF.STYLE_PRESETS[key].label} style — ${SF.STYLE_PRESETS[key].hint}`);
+  }
+
+  let fontCache = null;
+  async function loadPdfFonts() {
+    if (fontCache) return fontCache;
+    const files = { normal: 'CourierPrime-Regular.ttf', bold: 'CourierPrime-Bold.ttf', italic: 'CourierPrime-Italic.ttf', bolditalic: 'CourierPrime-BoldItalic.ttf' };
+    const out = {};
+    await Promise.all(
+      Object.entries(files).map(async ([k, f]) => {
+        const buf = await (await fetch(`vendor/fonts/${f}?v=${APP_VERSION}`)).arrayBuffer();
+        let bin = '';
+        const u8 = new Uint8Array(buf);
+        for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+        out[k] = btoa(bin);
+      })
+    );
+    fontCache = out;
+    return out;
   }
 
   async function exportAs(kind) {
@@ -906,7 +942,15 @@
       }
       try {
         const tf = SF.getTitleFields(s.content);
-        const doc = SF.buildPDF(model, { title: SF.plainText(tf.title || s.name), author: tf.authors.replace(/\n/g, ', ') });
+        let fonts = null;
+        if (model.options.font === 'courier-prime') {
+          try {
+            fonts = await loadPdfFonts();
+          } catch (e) {
+            fonts = null; // offline: fall back to built-in Courier
+          }
+        }
+        const doc = SF.buildPDF(model, { title: SF.plainText(tf.title || s.name), author: tf.authors.replace(/\n/g, ', ') }, fonts);
         doc.save(`${base}.pdf`);
         toast(`PDF downloaded · ${model.pages.length} page${model.pages.length === 1 ? '' : 's'}`);
       } catch (e) {
@@ -963,7 +1007,36 @@
       else el.value = v;
     });
     f.elements.smartEnter.checked = !!state.prefs.smartEnter;
+    f.elements.style.value = SF.detectStyle(s.settings);
     $('#settings-dialog').showModal();
+  }
+
+  /** Settings dialog: picking a style fills in its options; editing an option shows "Custom". */
+  function bindSettingsStyle() {
+    const f = $('#settings-form');
+    f.elements.style.addEventListener('change', () => {
+      const p = SF.STYLE_PRESETS[f.elements.style.value];
+      if (!p) return;
+      SF.PRESET_KEYS.forEach((k) => {
+        const el = f.elements[k];
+        if (!el) return;
+        if (el.type === 'checkbox') el.checked = !!p[k];
+        else el.value = p[k];
+      });
+      $('#style-hint').textContent = p.hint;
+    });
+    SF.PRESET_KEYS.forEach((k) => {
+      const el = f.elements[k];
+      if (!el) return;
+      el.addEventListener('change', () => {
+        const vals = {};
+        SF.PRESET_KEYS.forEach((kk) => {
+          const e2 = f.elements[kk];
+          if (e2) vals[kk] = e2.type === 'checkbox' ? e2.checked : e2.value;
+        });
+        f.elements.style.value = SF.detectStyle(vals);
+      });
+    });
   }
 
   function saveSettings() {
@@ -1283,6 +1356,8 @@
     });
 
     $('#settings-btn').addEventListener('click', openSettings);
+    bindSettingsStyle();
+    $('#style-select').addEventListener('change', (e) => setStyle(e.target.value));
     $('#settings-dialog').addEventListener('close', () => {
       if ($('#settings-dialog').returnValue === 'save') saveSettings();
     });

@@ -5,17 +5,20 @@
 'use strict';
 const path = require('path');
 const assert = require('assert');
-['parser', 'layout', 'export', 'docx', 'markdown', 'editor', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
+['parser', 'layout', 'export', 'docx', 'markdown', 'editor', 'importers', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
 const SF = globalThis.SF;
 
 let passed = 0;
 const failures = [];
+const pending = [];
 function test(name, fn) {
+  const fail = (e) => failures.push(`✗ ${name}\n    ${e.message}`);
   try {
-    fn();
-    passed++;
+    const r = fn();
+    if (r && typeof r.then === 'function') pending.push(r.then(() => passed++, fail));
+    else passed++;
   } catch (e) {
-    failures.push(`✗ ${name}\n    ${e.message}`);
+    fail(e);
   }
 }
 const types = (src) => SF.parse(src).tokens.map((t) => t.type);
@@ -418,7 +421,42 @@ test('DOCX is a valid zip with screenplay styles', () => {
   }
 });
 
+// ---------------------------------------------------------------- styles & importers
+test('format styles: Final Draft, Highland 2, Celtx, ReelScript presets', () => {
+  ['reelscript', 'finaldraft', 'highland', 'celtx'].forEach((k) => {
+    const st = SF.applyStyle({ ...SF.LAYOUT_DEFAULTS }, k);
+    assert.strictEqual(SF.detectStyle(st), k);
+  });
+  assert.strictEqual(SF.detectStyle(SF.LAYOUT_DEFAULTS), 'reelscript');
+  assert.strictEqual(SF.detectStyle({ ...SF.applyStyle({ ...SF.LAYOUT_DEFAULTS }, 'highland'), boldCharacterNames: true }), 'custom');
+  const src = 'INT. A - DAY\n\nBOB\nHi.\n';
+  const fd = body(SF.layout(src, SF.applyStyle({}, 'finaldraft')), 0);
+  assert.ok(fd[0].segs[0].runs.every((r) => !r.b) && fd[1].segs[0].runs.every((r) => !r.b));
+  const hl = body(SF.layout(src, SF.applyStyle({}, 'highland')), 0);
+  assert.ok(hl[0].segs[0].runs.every((r) => r.b) && hl[1].segs[0].runs.every((r) => !r.b));
+  // single vs double blank line before a scene heading
+  const two = 'X.\n\nINT. B - DAY\n';
+  const gap = (st) => { const it = body(SF.layout(two, SF.applyStyle({}, st)), 0); return Math.round((it[1].y - it[0].y) * 6); };
+  assert.strictEqual(gap('finaldraft'), 3);
+  assert.strictEqual(gap('celtx'), 2);
+});
+
+test('Courier Prime PDF keeps curly quotes and dashes', () => {
+  assert.strictEqual(SF.primeSafe('“Hi” — it’s…'), '“Hi” — it’s…');
+  assert.strictEqual(SF.pdfSafe('“Hi” — it’s…'), '"Hi" -- it\'s...');
+});
+
+test('Highland 2: .highland zip (deflated TextBundle) imports its text.fountain', async () => {
+  const buf = Buffer.from('UEsDBBQAAAAIAJNZRl2HWfISLQAAAC0AAAAaAAAAeC50ZXh0YnVuZGxlL3RleHQuZm91bnRhaW7z9AvRU/DwDw12VdBV8PN09wjh4gpKzMxTSEvMySnWA3Icwzy5PFJzcvL1uABQSwECFAMUAAAACACTWUZdh1nyEi0AAAAtAAAAGgAAAAAAAAAAAAAAgAEAAAAAeC50ZXh0YnVuZGxlL3RleHQuZm91bnRhaW5QSwUGAAAAAAEAAQBIAAAAZQAAAAAA', 'base64');
+  const files = await SF.unzip(buf);
+  assert.ok(files.has('x.textbundle/text.fountain'));
+  const t = await SF.fromHighland(buf);
+  assert.deepStrictEqual(types(t), ['scene_heading', 'action', 'dialogue']);
+});
+
 // ----------------------------------------------------------------
-console.log(failures.join('\n'));
-console.log(`\n${passed} passed, ${failures.length} failed`);
-process.exit(failures.length ? 1 : 0);
+Promise.all(pending).then(() => {
+  console.log(failures.join('\n'));
+  console.log(`\n${passed} passed, ${failures.length} failed`);
+  process.exit(failures.length ? 1 : 0);
+});

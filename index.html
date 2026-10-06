@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261006-6">
+  <link rel="stylesheet" href="styles.css?v=20261006-7">
   <style id="print-page-size">@page { size: 8.5in 11in; margin: 0; }</style>
 </head>
 <body>
@@ -26,8 +26,8 @@
       </div>
 
       <button class="btn btn-primary btn-block" id="new-script"><svg class="i"><use href="#i-plus"/></svg>New script</button>
-      <button class="btn btn-ghost btn-block" id="import-btn"><svg class="i"><use href="#i-upload"/></svg>Import .fountain / .fdx / .txt</button>
-      <input type="file" id="import-file" accept=".fountain,.spmd,.txt,.md,.fdx,text/plain" hidden>
+      <button class="btn btn-ghost btn-block" id="import-btn" title="Final Draft (.fdx), Highland 2 (.highland), Celtx (.celtx or its PDF), any screenplay PDF, Fountain, text"><svg class="i"><use href="#i-upload"/></svg>Import Final Draft · Highland · Celtx · PDF</button>
+      <input type="file" id="import-file" accept=".fountain,.spmd,.txt,.md,.markdown,.fdx,.highland,.celtx,.pdf,.html,.htm,text/plain,application/pdf" hidden>
 
       <label class="search">
         <svg class="i"><use href="#i-search"/></svg>
@@ -59,6 +59,17 @@
           <button role="tab" data-view="split" class="split-only"><svg class="i"><use href="#i-columns"/></svg><span>Split</span></button>
           <button role="tab" data-view="preview"><svg class="i"><use href="#i-file"/></svg><span>Pages</span></button>
         </div>
+
+        <label class="style-pick" title="Formatting style — matches the default output of each app">
+          <span>Style</span>
+          <select id="style-select" aria-label="Formatting style">
+            <option value="reelscript">ReelScript</option>
+            <option value="finaldraft">Final Draft</option>
+            <option value="highland">Highland 2</option>
+            <option value="celtx">Celtx</option>
+            <option value="custom" disabled>Custom</option>
+          </select>
+        </label>
 
         <button class="icon-btn" id="outline-toggle" aria-label="Toggle outline" title="Outline"><svg class="i"><use href="#i-list"/></svg></button>
         <button class="icon-btn" id="settings-btn" aria-label="Page settings" title="Page settings"><svg class="i"><use href="#i-settings"/></svg></button>
@@ -139,7 +150,7 @@
                   <button class="card" data-welcome="write"><svg class="i"><use href="#i-pen"/></svg><strong>Start writing</strong><span>Blank page, Fountain syntax</span></button>
                   <button class="card" data-welcome="sample"><svg class="i"><use href="#i-film"/></svg><strong>Open a sample</strong><span>See every element in action</span></button>
                   <button class="card" data-welcome="paste"><svg class="i"><use href="#i-sparkles"/></svg><strong>Paste from ChatGPT</strong><span>Or any messy script: we'll format it</span></button>
-                  <button class="card" data-welcome="import"><svg class="i"><use href="#i-upload"/></svg><strong>Import a file</strong><span>.fdx, .fountain or .txt</span></button>
+                  <button class="card" data-welcome="import"><svg class="i"><use href="#i-upload"/></svg><strong>Import a file</strong><span>Final Draft, Highland, Celtx, PDF</span></button>
                 </div>
               </div>
             </div>
@@ -184,6 +195,18 @@
     <form method="dialog" class="modal-card" id="settings-form">
       <header class="modal-head"><h2>Page settings</h2><button class="icon-btn" value="cancel" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></header>
       <div class="modal-body form-grid">
+        <label>Formatting style <small id="style-hint">Matches each app's default PDF</small>
+          <select name="style" id="settings-style">
+            <option value="reelscript">ReelScript — bold headings &amp; names</option>
+            <option value="finaldraft">Final Draft</option>
+            <option value="highland">Highland 2</option>
+            <option value="celtx">Celtx</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label>Font
+          <select name="font"><option value="courier-prime">Courier Prime (Highland, ReelScript)</option><option value="courier">Courier (Final Draft, Celtx)</option></select>
+        </label>
         <label>Paper size
           <select name="pageSize"><option value="letter">US Letter (8.5 × 11 in)</option><option value="a4">A4 (210 × 297 mm)</option></select>
         </label>
@@ -299,6 +322,20 @@
           <li><kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> bold, italic, underline</li>
           <li><kbd>Ctrl</kbd>+<kbd>S</kbd> save now · <kbd>Ctrl</kbd>+<kbd>P</kbd> download PDF</li>
         </ul>
+        <h3>Formatting styles</h3>
+        <p class="muted">Choose <strong>Style</strong> at the top (or in Page settings). Each one matches that app's default output, and you can still change any option after picking it.</p>
+        <table>
+          <thead><tr><th>Style</th><th>Scene headings</th><th>Character names</th><th>Before a scene heading</th><th>Font</th></tr></thead>
+          <tbody>
+            <tr><td>ReelScript</td><td>Bold caps</td><td>Bold</td><td>2 blank lines</td><td>Courier Prime</td></tr>
+            <tr><td>Final Draft</td><td>Plain caps</td><td>Plain</td><td>2 blank lines</td><td>Courier</td></tr>
+            <tr><td>Highland 2</td><td>Bold caps</td><td>Plain</td><td>1 blank line</td><td>Courier Prime</td></tr>
+            <tr><td>Celtx</td><td>Plain caps</td><td>Plain</td><td>1 blank line</td><td>Courier</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">All styles use the same industry page layout: 1.5″ left margin, dialogue at 2.5″, parentheticals at 3.1″, character names at 3.7″, transitions flush right, page numbers top right.</p>
+        <h3>Importing</h3>
+        <p class="muted"><strong>Final Draft</strong> .fdx · <strong>Highland 2</strong> .highland (or its .fountain) · <strong>Celtx</strong> .celtx from desktop Celtx. Celtx online only exports PDF or .fdx, so import either of those. <strong>PDF</strong> from any screenwriting app works if its text is selectable (not a scan). Use Import in the sidebar, or drag a file onto the page.</p>
         <h3>About the PDF</h3>
         <p class="muted">Courier 12pt, 1.5″ left margin, 1″ top/bottom, dialogue at 2.5″, character cues at 3.7″, about one page per minute of screen time. Long speeches break across pages with (MORE) and (CONT'D); scene headings are never stranded at the bottom of a page. Scripts in non-Latin scripts (Hindi, Telugu, Tamil…) should use <em>Print / Save as PDF</em>, which keeps every character.</p>
       </div>
@@ -335,14 +372,15 @@
     </defs>
   </svg>
 
-  <script src="vendor/jspdf.umd.min.js?v=20261006-6" defer></script>
-  <script src="js/parser.js?v=20261006-6" defer></script>
-  <script src="js/layout.js?v=20261006-6" defer></script>
-  <script src="js/export.js?v=20261006-6" defer></script>
-  <script src="js/markdown.js?v=20261006-6" defer></script>
-  <script src="js/docx.js?v=20261006-6" defer></script>
-  <script src="js/editor.js?v=20261006-6" defer></script>
-  <script src="js/sample.js?v=20261006-6" defer></script>
-  <script src="js/app.js?v=20261006-6" defer></script>
+  <script src="vendor/jspdf.umd.min.js?v=20261006-7" defer></script>
+  <script src="js/parser.js?v=20261006-7" defer></script>
+  <script src="js/layout.js?v=20261006-7" defer></script>
+  <script src="js/export.js?v=20261006-7" defer></script>
+  <script src="js/markdown.js?v=20261006-7" defer></script>
+  <script src="js/docx.js?v=20261006-7" defer></script>
+  <script src="js/importers.js?v=20261006-7" defer></script>
+  <script src="js/editor.js?v=20261006-7" defer></script>
+  <script src="js/sample.js?v=20261006-7" defer></script>
+  <script src="js/app.js?v=20261006-7" defer></script>
 </body>
 </html>

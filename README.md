@@ -4,6 +4,19 @@ A browser-based screenplay editor and formatter with a live page preview and one
 
 ## Features
 
+- **Formatting styles**: pick **ReelScript**, **Final Draft**, **Highland 2** or **Celtx** from the Style menu. Each one matches that app's default output:
+  - bold or plain scene headings,
+  - bold or plain character names,
+  - one or two blank lines before a scene heading,
+  - Courier Prime or Courier.
+
+  Every option can still be changed afterwards, which shows up as "Custom". PDFs embed Courier Prime when a style uses it, so curly quotes and dashes are kept.
+- **Import from other apps**:
+  - Final Draft (`.fdx`)
+  - Highland 2 (`.highland`, a zipped TextBundle, or its `.fountain`)
+  - classic Celtx (`.celtx`)
+  - any screenplay **PDF** with selectable text, including Celtx's PDF export. pdf.js reads the page layout and rebuilds scene headings, action, characters, parentheticals, dialogue, transitions and the title page.
+
 - **Final Draft-style Script view**: you type straight onto a formatted page, and each paragraph is a screenplay element.
   - **Enter** moves to the next element, as in Final Draft: Scene Heading goes to Action, Character to Dialogue, Dialogue to Action, Transition to Scene Heading.
   - **Tab** changes the element: Action becomes Character, Character becomes Transition, and Tab at the end of a speech adds a Parenthetical.
@@ -53,11 +66,14 @@ A browser-based screenplay editor and formatter with a live page preview and one
 | `js/parser.js` | Fountain parser, inline emphasis, smart clean-up, title-page helpers |
 | `js/layout.js` | Geometry and pagination → page model (inches) |
 | `js/export.js` | PDF (jsPDF), Final Draft export/import |
+| `js/importers.js` | Highland 2, Celtx, PDF (pdf.js) and other importers; tiny ZIP reader |
 | `js/markdown.js` | ChatGPT / Markdown → Fountain converter |
 | `js/docx.js` | Word .docx writer (includes a tiny ZIP writer) |
 | `js/editor.js` | Final Draft–style page editor (element model ⇄ Fountain) |
 | `js/app.js` | Editor, storage, preview, dialogs |
 | `vendor/jspdf.umd.min.js` | jsPDF 4.2.1 (MIT), vendored so the PDF export works offline |
+| `vendor/pdfjs/` | pdf.js 4.10 (Apache-2.0), loaded only when importing a PDF |
+| `vendor/fonts/` | Courier Prime (SIL OFL 1.1), embedded in PDFs for Courier Prime styles |
 | `tests/run.js` | Unit tests: `node tests/run.js` |
 
 ## Notes

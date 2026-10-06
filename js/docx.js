@@ -144,7 +144,7 @@
     const sceneRpr = '<w:caps/>' + (opts.boldSceneHeadings ? '<w:b/>' : '') + (opts.underlineSceneHeadings ? '<w:u w:val="single"/>' : '');
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New" w:eastAsia="Courier New"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault>
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${opts.font === 'courier-prime' ? 'Courier Prime' : 'Courier New'}" w:hAnsi="${opts.font === 'courier-prime' ? 'Courier Prime' : 'Courier New'}" w:eastAsia="Courier New"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault>
 <w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="${LINE}" w:lineRule="exact"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:pPr><w:widowControl/></w:pPr></w:style>
 ${styleDef('SceneHeading', 'Scene Heading', sp(sceneBefore) + '<w:keepNext/><w:keepLines/>', sceneRpr)}
