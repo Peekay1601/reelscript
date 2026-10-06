@@ -27,12 +27,29 @@
 
   const isBlank = (s) => s === undefined || s.trim() === '';
 
+  // ReelScript rich formatting lives in Fountain notes so other Fountain apps simply hide it:
+  //   inline   [[rs:s]]…[[rs:/s]] strike · [[rs:c=#c00]]…[[rs:/c]] colour · [[rs:h=#ff0]]…[[rs:/h]] highlight
+  //   paragraph [[rs:align=left|center|right|justify]]
+  const RS_RE = /\[\[rs:[^\]]*\]\]/gi;
+  const stripRs = (s) => String(s).replace(RS_RE, '');
+
+  /** Paragraph alignment marker → { align, text (without the marker) } */
+  function paraAlign(text) {
+    let align = null;
+    const t = String(text || '').replace(/\s*\[\[rs:align=(left|center|right|justify)\]\]/gi, (m, a) => {
+      align = a.toLowerCase();
+      return '';
+    });
+    return { align, text: t };
+  }
+
   function hasUpper(s) {
-    return /\p{Lu}/u.test(s);
+    return /\p{Lu}/u.test(stripRs(s));
   }
 
   function isAllCaps(s) {
-    return hasUpper(s) && s === s.toUpperCase();
+    const t = stripRs(s);
+    return hasUpper(t) && t === t.toUpperCase();
   }
 
   function isEpisode(line) {
@@ -41,14 +58,16 @@
   }
 
   function isSceneHeading(line) {
-    return SCENE_RE.test(line);
+    return SCENE_RE.test(stripRs(line).trim());
   }
 
   function isTransition(line) {
-    return isAllCaps(line) && (/TO:$/.test(line) || TRANSITION_WORDS_RE.test(line));
+    const t = stripRs(line).trim();
+    return isAllCaps(t) && (/TO:$/.test(t) || TRANSITION_WORDS_RE.test(t));
   }
 
   function isCharacterCue(line) {
+    line = stripRs(line).trim();
     if (line.startsWith('@')) return line.length > 1;
     const s = line.replace(/\s*\^$/, '');
     if (/[:]$/.test(s)) return false;
@@ -65,7 +84,7 @@
 
   /** Remove [[notes]]; keeps line count stable, returns notes separately. */
   function stripNotes(src, notes) {
-    return src.replace(/\[\[([\s\S]*?)\]\]/g, (m, body, offset) => {
+    return src.replace(/\[\[(?!rs:)([\s\S]*?)\]\]/g, (m, body, offset) => {
       notes.push({ text: body.trim(), offset });
       return NOTE_SENTINEL + (notes.length - 1) + '\u0002' + m.replace(/[^\n]/g, '');
     });
@@ -251,7 +270,7 @@
           if (l === null) continue;
           if ((isBlank(l) && l !== '  ') || softBreak.has(j) || /^\s*#{1,6}\s+\S/.test(l)) break;
           const t = l.trim();
-          if (/^\(.*\)$/.test(t)) block.parts.push({ type: 'parenthetical', text: t, line: j });
+          if (/^\(.*\)$/.test(stripRs(t).trim())) block.parts.push({ type: 'parenthetical', text: t, line: j });
           else if (t.startsWith('~')) block.parts.push({ type: 'lyrics', text: t.slice(1).trim(), line: j });
           else block.parts.push({ type: 'dialogue', text: t, line: j });
         }
@@ -295,10 +314,16 @@
    */
   function parseInline(text) {
     const runs = [];
-    const st = { b: false, i: false, u: false };
+    const st = { b: false, i: false, u: false, s: false, c: null, h: null };
     let buf = '';
     const flush = () => {
-      if (buf) runs.push({ text: buf, b: st.b, i: st.i, u: st.u });
+      if (buf) {
+        const r = { text: buf, b: st.b, i: st.i, u: st.u };
+        if (st.s) r.s = true;
+        if (st.c) r.c = st.c;
+        if (st.h) r.h = st.h;
+        runs.push(r);
+      }
       buf = '';
     };
     const hasCloser = (marker, from) => {
@@ -312,6 +337,23 @@
 
     for (let p = 0; p < text.length; ) {
       const c = text[p];
+      if (c === '[' && text.slice(p, p + 5).toLowerCase() === '[[rs:') {
+        const end = text.indexOf(']]', p);
+        if (end !== -1) {
+          const tag = text.slice(p + 5, end).trim().toLowerCase();
+          flush();
+          let m;
+          if (tag === 's') st.s = true;
+          else if (tag === '/s') st.s = false;
+          else if ((m = /^c=(#[0-9a-fA-F]{3,8})$/.exec(tag))) st.c = m[1].toLowerCase();
+          else if (tag === '/c') st.c = null;
+          else if ((m = /^h=(#[0-9a-fA-F]{3,8})$/.exec(tag))) st.h = m[1].toLowerCase();
+          else if (tag === '/h') st.h = null;
+          // align=… and unknown tags are paragraph-level / ignored here
+          p = end + 2;
+          continue;
+        }
+      }
       if (c === '\\' && (text[p + 1] === '*' || text[p + 1] === '_')) {
         buf += text[p + 1];
         p += 2;
@@ -571,6 +613,8 @@
     getTitleFields,
     setTitleFields,
     isSceneHeading,
+    stripRs,
+    paraAlign,
     isEpisode,
     isCharacterCue,
     isTransition,

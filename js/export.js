@@ -58,6 +58,20 @@
     return [...bad];
   }
 
+  function hexRgb(hex) {
+    let h = String(hex || '#000').replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    if (h.length === 12) h = h[0] + h[1] + h[4] + h[5] + h[8] + h[9];
+    const n = parseInt(h.slice(0, 6), 16) || 0;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const hex6 = (hex) => {
+    const [r, g, b] = hexRgb(hex);
+    return [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+  };
+  // Final Draft stores colours as 16-bit channels: #RRRRGGGGBBBB
+  const fdxColor = (hex) => '#' + hex6(hex).replace(/(..)/g, '$1$1').toUpperCase();
+
   function fontStyle(r) {
     if (r.b && r.i) return 'bolditalic';
     if (r.b) return 'bold';
@@ -104,10 +118,23 @@
           s.runs.forEach((r) => {
             const t = safe(r.text);
             if (!t) return;
+            const width = [...t].length * SF.CHAR_WIDTH;
+            if (r.h) {
+              const [hr, hg, hb] = hexRgb(r.h);
+              doc.setFillColor(hr, hg, hb);
+              doc.rect(x, it.y + 0.012, width, SF.LINE_HEIGHT - 0.012, 'F');
+            }
+            const [cr, cg, cb] = r.c ? hexRgb(r.c) : [0, 0, 0];
+            doc.setTextColor(cr, cg, cb);
+            doc.setDrawColor(cr, cg, cb);
             doc.setFont(family, fontStyle(r));
             doc.text(t, x, base);
-            const width = [...t].length * SF.CHAR_WIDTH;
             if (r.u) doc.line(x, base + 0.025, x + width, base + 0.025);
+            if (r.s) doc.line(x, base - 0.035, x + width, base - 0.035);
+            if (r.c) {
+              doc.setTextColor(0, 0, 0);
+              doc.setDrawColor(0, 0, 0);
+            }
             x += [...r.text].length * SF.CHAR_WIDTH;
           });
         });
@@ -152,7 +179,10 @@
         if (r.b || (extra && extra.b)) st.push('Bold');
         if (r.i || (extra && extra.i)) st.push('Italic');
         if (r.u || (extra && extra.u)) st.push('Underline');
-        return `<Text${st.length ? ` Style="${st.join('+')}"` : ''}>${xmlEscape(r.text)}</Text>`;
+        if (r.s) st.push('Strikeout');
+        const col = r.c ? ` Color="${fdxColor(r.c)}"` : '';
+        const bg = r.h ? ` Background="${fdxColor(r.h)}"` : '';
+        return `<Text${st.length ? ` Style="${st.join('+')}"` : ''}${col}${bg}>${xmlEscape(r.text)}</Text>`;
       })
       .join('');
   }
@@ -162,13 +192,16 @@
     const parsed = SF.parse(src);
     const out = [];
     let newPage = false;
+    const ALIGN_FDX = { left: 'Left', center: 'Center', right: 'Right', justify: 'Full' };
     const para = (type, text, attrs, extra) => {
       let a = attrs || '';
+      const pa = SF.paraAlign(text);
+      if (pa.align && !/Alignment=/.test(a)) a += ` Alignment="${ALIGN_FDX[pa.align]}"`;
       if (newPage) {
         a += ' StartsNewPage="Yes"';
         newPage = false;
       }
-      return `    <Paragraph Type="${type}"${a}>${fdxText(text, extra)}</Paragraph>`;
+      return `    <Paragraph Type="${type}"${a}>${fdxText(pa.text, extra)}</Paragraph>`;
     };
     const dialogue = (d) => {
       const rows = [para('Character', d.character, '', opts.boldCharacterNames ? { b: true } : null)];
@@ -268,6 +301,11 @@
             if (/Bold/.test(style) && /Italic/.test(style)) s = `***${s}***`;
             else if (/Bold/.test(style)) s = `**${s}**`;
             else if (/Italic/.test(style)) s = `*${s}*`;
+            if (/Strikeout/.test(style)) s = `[[rs:s]]${s}[[rs:/s]]`;
+            const col = t.getAttribute('Color');
+            if (col && !/^#0+$/.test(col)) s = `[[rs:c=#${hex6(col)}]]${s}[[rs:/c]]`;
+            const bg = t.getAttribute('Background');
+            if (bg && !/^#F+$/i.test(bg)) s = `[[rs:h=#${hex6(bg)}]]${s}[[rs:/h]]`;
           }
           return s;
         })
@@ -281,7 +319,10 @@
 
     const emit = (p, dualFirst) => {
       const type = p.getAttribute('Type') || 'Action';
-      const text = textOf(p);
+      let text = textOf(p);
+      const al = { Right: 'right', Full: 'justify', Justify: 'justify', Center: 'center' }[p.getAttribute('Alignment') || ''];
+      // Centered Action/General already becomes a centered element; other alignments keep a marker
+      if (al && text.trim() && !(al === 'center' && /^(Action|General)$/.test(type)) && type !== 'Transition') text += ` [[rs:align=${al}]]`;
       if (p.getAttribute('StartsNewPage') === 'Yes') {
         blank();
         out.push('===');

@@ -4,6 +4,14 @@ A browser-based screenplay editor and formatter with a live page preview and one
 
 ## Features
 
+- **Word-style text formatting** in the toolbar:
+  - bold, italic, underline, strikethrough;
+  - font color and highlight palettes;
+  - align left, center, right or justify for each paragraph;
+  - change case (Sentence, lower, UPPER, Capitalize Each Word);
+  - clear formatting.
+
+  Word's shortcuts work too: Ctrl+L/E/R/J, Shift+F3, Ctrl+Space, plus Ctrl+Shift+X for strikethrough. Formatting appears in the preview, PDF, Word (.docx) and Final Draft (.fdx) as real formatting. Final Draft's color, strikeout and alignment also import back. In Fountain it's stored as `[[rs:…]]` notes, which other Fountain apps hide, so the file stays clean. Font and size stay Courier 12pt, as screenplays require.
 - **Formatting styles** for 13 formatters: ReelScript, Final Draft, WriterDuet, Fade In, Highland 2, Arc Studio Pro, Celtx, Movie Magic Screenwriter, StudioBinder, KIT Scenarist, Trelby, Beat, and BBC / UK (A4).
   - A style sets the font (Courier Prime or Courier), one or two blank lines before scene headings, underlining, and paper size for BBC.
   - **Bold is never part of a style.** Every one of these apps leaves bold up to the writer, so the toolbar's **Bold: Scene headings / Names** toggles control it, and switching styles never changes them.

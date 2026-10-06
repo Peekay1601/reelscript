@@ -148,14 +148,18 @@
     }
 
     els.forEach((el, idx) => {
-      const raw = el.text.replace(/\s+$/g, '');
+      // Paragraph alignment travels as a trailing [[rs:align=…]] marker on the element
+      const pa = SF.paraAlign(el.text || '');
+      const am = pa.align ? ` [[rs:align=${pa.align}]]` : '';
+      const raw = pa.text.replace(/\s+$/g, '');
       const t = raw.trim();
       const prev = els[idx - 1];
+      const emitLines = (lines) => lines.forEach((l, k) => emit(k === lines.length - 1 ? l + am : l, idx));
       switch (el.type) {
         case 'episode':
           if (!t) return;
           blank();
-          emit(SF.isEpisode(t) && !SF.isSceneHeading(t) ? t : '#! ' + t, idx);
+          emit((SF.isEpisode(t) && !SF.isSceneHeading(t) ? t : '#! ' + t) + am, idx);
           blank();
           break;
         case 'scene_heading': {
@@ -163,19 +167,21 @@
           blank();
           const up = t.toUpperCase();
           const num = el.number ? ` #${el.number}#` : '';
-          emit((SF.isSceneHeading(up) ? up : '.' + up) + num, idx);
+          emit((SF.isSceneHeading(up) ? up : '.' + up) + am + num, idx);
           blank();
           break;
         }
         case 'action': {
           if (!t) return;
           blank();
-          raw.split('\n').forEach((l, k) => {
-            let line = l.trim();
-            if (k === 0 && needsForceAction(line)) line = '!' + line;
-            else if (k > 0 && line === '') line = '  ';
-            emit(line, idx);
-          });
+          emitLines(
+            raw.split('\n').map((l, k) => {
+              let line = l.trim();
+              if (k === 0 && needsForceAction(line)) line = '!' + line;
+              else if (k > 0 && line === '') line = '  ';
+              return line;
+            })
+          );
           blank();
           break;
         }
@@ -184,7 +190,7 @@
           blank();
           let name = el.forced ? t : t.toUpperCase();
           if (el.forced || !SF.isCharacterCue(name) || SF.isSceneHeading(name) || SF.isEpisode(name)) name = '@' + name;
-          emit(name + (el.dual ? ' ^' : ''), idx);
+          emit(name + am + (el.dual ? ' ^' : ''), idx);
           break;
         }
         case 'parenthetical':
@@ -194,18 +200,20 @@
           if (!out.length || out[out.length - 1] === '' || !inSpeech(els, idx)) {
             // Speech without a character cue above it can't be expressed in Fountain: keep it as action
             blank();
-            raw.split('\n').forEach((l, k) => {
-              const line = l.trim();
-              emit(k === 0 && needsForceAction(line) ? '!' + line : line || '  ', idx);
-            });
+            emitLines(
+              raw.split('\n').map((l, k) => {
+                const line = l.trim();
+                return k === 0 && needsForceAction(line) ? '!' + line : line || '  ';
+              })
+            );
             blank();
             break;
           }
           if (el.type === 'parenthetical') {
             const inner = t.replace(/^\(/, '').replace(/\)$/, '');
-            emit(`(${inner})`, idx);
+            emit(`(${inner})${am}`, idx);
           } else {
-            raw.split('\n').forEach((l) => emit(l.trim() === '' ? '  ' : l.trim(), idx));
+            emitLines(raw.split('\n').map((l) => (l.trim() === '' ? '  ' : l.trim())));
           }
           const next = els[idx + 1];
           if (!next || !['parenthetical', 'dialogue'].includes(next.type)) blank();
@@ -215,14 +223,14 @@
           if (!t) return;
           blank();
           const up = t.toUpperCase();
-          emit(SF.isTransition(up) ? up : '> ' + up, idx);
+          emit((SF.isTransition(up) ? up : '> ' + up) + am, idx);
           blank();
           break;
         }
         case 'centered':
           if (!t) return;
           blank();
-          emit(`> ${t} <`, idx);
+          emit(`> ${t}${am} <`, idx);
           blank();
           break;
         case 'page_break':
@@ -275,9 +283,24 @@
         if (r.u) h = `<u>${h}</u>`;
         if (r.i) h = `<i>${h}</i>`;
         if (r.b) h = `<b>${h}</b>`;
+        if (r.s) h = `<s>${h}</s>`;
+        if (r.h) h = `<span style="background-color:${r.h}">${h}</span>`;
+        if (r.c) h = `<span style="color:${r.c}">${h}</span>`;
         return h;
       })
       .join('');
+  }
+
+  /** CSS colour (rgb()/#hex) → #rrggbb, or null for transparent */
+  function toHex(css) {
+    if (!css) return null;
+    const v = String(css).trim().toLowerCase();
+    if (!v || v === 'transparent' || v === 'inherit' || v === 'initial') return null;
+    if (/^#[0-9a-f]{3,8}$/.test(v)) return v.length === 4 ? '#' + v.slice(1).split('').map((c) => c + c).join('') : v.slice(0, 7);
+    const m = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)(?:[\s,/]+([\d.]+))?/.exec(v);
+    if (!m) return null;
+    if (m[4] !== undefined && +m[4] === 0) return null;
+    return '#' + [m[1], m[2], m[3]].map((x) => (+x).toString(16).padStart(2, '0')).join('');
   }
 
   function textFromNode(node) {
@@ -296,49 +319,45 @@
       const s = { ...st };
       const tag = n.tagName;
       const style = n.style || {};
+      const deco = (style.textDecoration || '') + ' ' + (style.textDecorationLine || '');
       if (tag === 'B' || tag === 'STRONG' || /^(bold|[6-9]00)$/.test(style.fontWeight || '')) s.b = true;
+      if (/^(normal|[1-5]00)$/.test(style.fontWeight || '') && tag === 'SPAN') s.b = false;
       if (tag === 'I' || tag === 'EM' || style.fontStyle === 'italic') s.i = true;
-      if (tag === 'U' || /underline/.test(style.textDecoration || style.textDecorationLine || '')) s.u = true;
+      if (tag === 'U' || /underline/.test(deco)) s.u = true;
+      if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL' || /line-through/.test(deco)) s.s = true;
+      const col = toHex(style.color || (tag === 'FONT' && n.getAttribute('color')));
+      if (col) s.c = /^#(000000|111111)$/.test(col) ? null : col;
+      const bg = toHex(style.backgroundColor);
+      if (bg) s.h = /^#ffffff$/.test(bg) ? null : bg;
       if ((tag === 'DIV' || tag === 'P') && runs.length && n !== node) runs.push({ text: '\n', ...st });
       n.childNodes.forEach((c) => walk(c, s));
     };
-    walk(node, { b: false, i: false, u: false });
+    walk(node, { b: false, i: false, u: false, s: false, c: null, h: null });
 
-    // Serialise runs with Fountain markers; markers never wrap surrounding spaces
-    let out = '';
-    let cur = { b: false, i: false, u: false };
-    const close = () => {
-      if (cur.i) out += '*';
-      if (cur.b) out += '**';
-      if (cur.u) out += '_';
-      cur = { b: false, i: false, u: false };
-    };
+    // Merge neighbours with identical style
+    const groups = [];
     runs.forEach((r) => {
-      const t = r.text.replace(/([*_])/g, '\\$1');
-      if (!t) return;
+      if (!r.text) return;
+      const g = groups[groups.length - 1];
+      if (g && g.b === r.b && g.i === r.i && g.u === r.u && g.s === r.s && g.c === r.c && g.h === r.h) g.text += r.text;
+      else groups.push({ ...r });
+    });
+
+    // Serialise: [[rs:…]] markers outside, Fountain **/*/_ inside; emphasis never wraps edge spaces
+    let out = '';
+    groups.forEach((g) => {
+      const t = g.text.replace(/([*_])/g, '\\$1');
+      const rsOpen = (g.c ? `[[rs:c=${g.c}]]` : '') + (g.h ? `[[rs:h=${g.h}]]` : '') + (g.s ? '[[rs:s]]' : '');
+      const rsClose = (g.s ? '[[rs:/s]]' : '') + (g.h ? '[[rs:/h]]' : '') + (g.c ? '[[rs:/c]]' : '');
       const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(t);
-      const styled = r.b || r.i || r.u;
-      if (!m[2] || !styled) {
-        if (cur.b || cur.i || cur.u) close();
+      if (!m[2]) {
         out += t;
         return;
       }
-      const same = cur.b === r.b && cur.i === r.i && cur.u === r.u;
-      if (!same || m[1]) {
-        if (cur.b || cur.i || cur.u) close();
-        out += m[1];
-        if (r.u) out += '_';
-        if (r.b) out += '**';
-        if (r.i) out += '*';
-        cur = { b: r.b, i: r.i, u: r.u };
-      }
-      out += m[2];
-      if (m[3]) {
-        close();
-        out += m[3];
-      }
+      const open = (g.u ? '_' : '') + (g.b ? '**' : '') + (g.i ? '*' : '');
+      const close = (g.i ? '*' : '') + (g.b ? '**' : '') + (g.u ? '_' : '');
+      out += rsOpen + m[1] + open + m[2] + close + m[3] + rsClose;
     });
-    if (cur.b || cur.i || cur.u) close();
     return out;
   }
 
@@ -398,7 +417,7 @@
     _elData(div) {
       return {
         type: div.dataset.t,
-        text: div.dataset.t === 'page_break' ? '' : textFromNode(div),
+        text: div.dataset.t === 'page_break' ? '' : textFromNode(div) + (div.dataset.align && div.textContent.trim() ? ` [[rs:align=${div.dataset.align}]]` : ''),
         number: div.dataset.num || '',
         dual: div.dataset.dual === '1',
         forced: div.dataset.forced === '1',
@@ -431,7 +450,11 @@
       if (e.type === 'page_break') {
         div.contentEditable = 'false';
         div.innerHTML = '';
-      } else div.innerHTML = htmlFromText(e.text) || '<br>';
+      } else {
+        const pa = SF.paraAlign(e.text);
+        if (pa.align) div.dataset.align = pa.align;
+        div.innerHTML = htmlFromText(pa.text) || '<br>';
+      }
       return div;
     }
 
@@ -535,7 +558,10 @@
       const el = this.elements()[Math.min(s.idx, this.elements().length - 1)];
       this.root.focus({ preventScroll: true });
       this.setCaret(el, s.off);
-      this._changed(true);
+      // load() already updated _lastText, so tell the app directly: save + re-render the preview
+      const text = this.toFountain();
+      this._lastText = text;
+      if (this.opts.onChange) this.opts.onChange(text, true);
     }
 
     undo() {
@@ -1055,6 +1081,13 @@
           this._onTab(e.shiftKey);
           return;
         }
+        if (e.key === 'F3' && e.shiftKey) {
+          // Word: Shift+F3 cycles UPPER → lower → Title case
+          e.preventDefault();
+          const t = window.getSelection().toString() || (this.currentEl() || {}).textContent || '';
+          this.changeCase(t === t.toUpperCase() ? 'lower' : t === t.toLowerCase() ? 'title' : 'upper');
+          return;
+        }
         if (e.key === 'Backspace' && !mod) return this._onBackspace(e);
         if (e.key === 'Delete' && !mod) return this._onDelete(e);
         if (mod && !e.altKey) {
@@ -1069,9 +1102,25 @@
             this.redo();
             return;
           }
-          if (k === 'b' || k === 'i' || k === 'u') {
+          if ((k === 'b' || k === 'i' || k === 'u') && !e.shiftKey) {
             e.preventDefault();
             this.format(k);
+            return;
+          }
+          if (k === 'x' && e.shiftKey) {
+            e.preventDefault();
+            this.format('s');
+            return;
+          }
+          const al = { l: 'left', e: 'center', r: 'right', j: 'justify' }[k];
+          if (al) {
+            e.preventDefault();
+            this.align(al);
+            return;
+          }
+          if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+            this.clearFormatting();
             return;
           }
           const map = { 0: 'episode', 1: 'scene_heading', 2: 'action', 3: 'character', 4: 'parenthetical', 5: 'dialogue', 6: 'transition', 7: 'centered' };
@@ -1121,9 +1170,148 @@
 
     format(k) {
       this.checkpoint();
+      this._ensureSelection();
       document.execCommand('styleWithCSS', false, false);
-      document.execCommand(k === 'b' ? 'bold' : k === 'i' ? 'italic' : 'underline');
+      const cmd = { b: 'bold', i: 'italic', u: 'underline', s: 'strikeThrough' }[k];
+      if (cmd) document.execCommand(cmd);
+      this._afterFormat();
+    }
+
+    /** Word-style formatting ------------------------------------------------ */
+    _ensureSelection() {
+      if (document.activeElement !== this.root) this.root.focus({ preventScroll: true });
+      const sel = window.getSelection();
+      if (!sel.rangeCount || !this.root.contains(sel.anchorNode)) {
+        const el = this.currentEl() || this.elements()[0];
+        if (el) this.setCaret(el, Infinity);
+      }
+    }
+
+    _afterFormat() {
+      this._normalize();
       this._changed();
+      if (this.opts.onCaret) this.opts.onCaret();
+    }
+
+    /** Elements touched by the current selection (or the caret's element). */
+    selectedElements() {
+      const sel = window.getSelection();
+      if (!sel.rangeCount || !this.root.contains(sel.anchorNode)) {
+        const el = this.currentEl();
+        return el ? [el] : [];
+      }
+      const r = sel.getRangeAt(0);
+      const els = this.elements().filter((el) => r.intersectsNode(el));
+      return els.length ? els : [this.currentEl()].filter(Boolean);
+    }
+
+    /** If nothing is selected, select the word at the caret (like Word). */
+    _selectWordIfCollapsed() {
+      const sel = window.getSelection();
+      if (!sel.rangeCount || !sel.isCollapsed) return;
+      if (sel.modify) {
+        sel.modify('move', 'backward', 'word');
+        sel.modify('extend', 'forward', 'word');
+      }
+    }
+
+    color(hex) {
+      this.checkpoint();
+      this._ensureSelection();
+      this._selectWordIfCollapsed();
+      document.execCommand('styleWithCSS', false, true);
+      document.execCommand('foreColor', false, hex || '#111111');
+      document.execCommand('styleWithCSS', false, false);
+      this._afterFormat();
+    }
+
+    highlight(hex) {
+      this.checkpoint();
+      this._ensureSelection();
+      this._selectWordIfCollapsed();
+      document.execCommand('styleWithCSS', false, true);
+      document.execCommand('hiliteColor', false, hex || 'transparent');
+      document.execCommand('styleWithCSS', false, false);
+      this._afterFormat();
+    }
+
+    static defaultAlign(type) {
+      return type === 'transition' ? 'right' : type === 'centered' || type === 'episode' ? 'center' : 'left';
+    }
+
+    align(a) {
+      this.checkpoint();
+      this.selectedElements().forEach((el) => {
+        if (el.dataset.t === 'page_break') return;
+        if (!a || a === ScriptEditor.defaultAlign(el.dataset.t)) delete el.dataset.align;
+        else el.dataset.align = a;
+      });
+      this._changed();
+      if (this.opts.onCaret) this.opts.onCaret();
+    }
+
+    currentAlign() {
+      const el = this.currentEl();
+      if (!el) return 'left';
+      return el.dataset.align || ScriptEditor.defaultAlign(el.dataset.t);
+    }
+
+    changeCase(mode) {
+      this._ensureSelection();
+      const sel = window.getSelection();
+      if (sel.isCollapsed) {
+        const el = this.currentEl();
+        if (!el) return;
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+      const t = sel.toString();
+      if (!t) return;
+      const out =
+        mode === 'upper'
+          ? t.toUpperCase()
+          : mode === 'lower'
+          ? t.toLowerCase()
+          : mode === 'title'
+          ? t.toLowerCase().replace(/(^|[\s(\-"“'‘])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
+          : t.toLowerCase().replace(/(^\s*|[.!?]\s+)(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+      this.checkpoint();
+      document.execCommand('insertText', false, out);
+      // re-select the changed text so case can be cycled
+      this._afterFormat();
+    }
+
+    clearFormatting() {
+      this.checkpoint();
+      this._ensureSelection();
+      const sel = window.getSelection();
+      const els = this.selectedElements();
+      if (sel.isCollapsed) {
+        els.forEach((el) => {
+          if (el.dataset.t === 'page_break') return;
+          el.innerHTML = esc(el.textContent) || '<br>';
+        });
+      } else {
+        document.execCommand('removeFormat');
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('hiliteColor', false, 'transparent');
+        document.execCommand('styleWithCSS', false, false);
+      }
+      els.forEach((el) => delete el.dataset.align);
+      this._afterFormat();
+    }
+
+    /** Formatting state at the caret, for toolbar buttons */
+    formatState() {
+      let strike = false;
+      try {
+        strike = document.queryCommandState('strikeThrough');
+      } catch (e) {
+        /* ignore */
+      }
+      return { align: this.currentAlign(), strike };
     }
 
     setPageStyle(model, opts) {

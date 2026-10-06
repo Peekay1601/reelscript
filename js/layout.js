@@ -106,19 +106,78 @@
   function toChars(text, extra) {
     const chars = [];
     SF.parseInline(text).forEach((r) => {
-      for (const ch of r.text) chars.push({ ch, b: r.b || !!(extra && extra.b), i: r.i || !!(extra && extra.i), u: r.u || !!(extra && extra.u) });
+      for (const ch of r.text) {
+        const c = { ch, b: r.b || !!(extra && extra.b), i: r.i || !!(extra && extra.i), u: r.u || !!(extra && extra.u) };
+        if (r.s) c.s = true;
+        if (r.c) c.c = r.c;
+        if (r.h) c.h = r.h;
+        chars.push(c);
+      }
     });
     return chars;
   }
+
+  const sameStyle = (a, b) => a.b === b.b && a.i === b.i && a.u === b.u && !!a.s === !!b.s && (a.c || null) === (b.c || null) && (a.h || null) === (b.h || null);
 
   function toRuns(chars) {
     const runs = [];
     chars.forEach((c) => {
       const last = runs[runs.length - 1];
-      if (last && last.b === c.b && last.i === c.i && last.u === c.u) last.text += c.ch;
-      else runs.push({ text: c.ch, b: c.b, i: c.i, u: c.u });
+      if (last && sameStyle(last, c)) last.text += c.ch;
+      else {
+        const r = { text: c.ch, b: c.b, i: c.i, u: c.u };
+        if (c.s) r.s = true;
+        if (c.c) r.c = c.c;
+        if (c.h) r.h = c.h;
+        runs.push(r);
+      }
     });
     return runs;
+  }
+
+  const runsToChars = (runs) => {
+    const out = [];
+    runs.forEach((r) => {
+      for (const ch of r.text) out.push({ ...r, ch, text: undefined });
+    });
+    return out;
+  };
+
+  /** Spread a line to the full width by widening its spaces (monospace justify). */
+  function justifyRuns(runs, width) {
+    const chars = runsToChars(runs);
+    const spaces = chars.map((c, k) => (c.ch === ' ' ? k : -1)).filter((k) => k > 0 && k < chars.length - 1);
+    let extra = width - chars.length;
+    if (!spaces.length || extra <= 0) return runs;
+    const add = new Array(chars.length).fill(0);
+    for (let k = 0; extra > 0; k = (k + 1) % spaces.length, extra--) add[spaces[k]]++;
+    const out = [];
+    chars.forEach((c, k) => {
+      out.push(c);
+      for (let n = 0; n < add[k]; n++) out.push({ ...c, ch: ' ' });
+    });
+    return toRuns(out);
+  }
+
+  /** Element box from its geometry spec (left x + width in chars). */
+  function boxOf(spec) {
+    if (spec.x != null) return { x: spec.x, w: spec.width };
+    if (spec.right != null) return { x: spec.right - spec.width * CW, w: spec.width };
+    return { x: spec.center - (spec.width * CW) / 2, w: spec.width };
+  }
+
+  /** Position wrapped lines inside an element box with left/center/right/justify alignment. */
+  function alignedSegs(lines, spec, align) {
+    // A transition that the writer re-aligns uses the full text column (1.5"–7.5")
+    const b = align && spec.right != null ? boxOf(EL.action) : boxOf(spec);
+    const a = align || (spec.right != null ? 'right' : spec.center != null ? 'center' : 'left');
+    return lines.map((runs, k) => {
+      let rr = runs;
+      if (a === 'justify' && k < lines.length - 1) rr = justifyRuns(runs, b.w);
+      const len = runsLength(rr);
+      const x = a === 'center' ? b.x + ((b.w - len) * CW) / 2 : a === 'right' ? b.x + (b.w - len) * CW : b.x;
+      return seg(x, rr);
+    });
   }
 
   /** Greedy word-wrap on a styled char array. */
@@ -189,11 +248,17 @@
 
   function dialogueLines(block, geo, name, opts) {
     const lines = [];
-    const cue = wrapText(block.forced ? name : upper(name), geo.character.width, opts && opts.boldCharacterNames ? { b: true } : null);
-    cue.forEach((runs) => lines.push({ kind: 'character', segs: [seg(geo.character.x, runs)], src: block.line }));
+    const cn = SF.paraAlign(name);
+    const cue = wrapText(block.forced ? cn.text : upper(cn.text), geo.character.width, opts && opts.boldCharacterNames ? { b: true } : null);
+    alignedSegs(cue, geo.character, cn.align).forEach((sg) => lines.push({ kind: 'character', segs: [sg], src: block.line }));
     block.parts.forEach((p) => {
       const g = geo[p.type];
-      const wrapped = p.text === '' ? [[]] : wrapText(p.text, g.width, p.type === 'lyrics' ? { i: true } : null);
+      const pa = SF.paraAlign(p.text);
+      const wrapped = pa.text === '' ? [[]] : wrapText(pa.text, g.width, p.type === 'lyrics' ? { i: true } : null);
+      if (pa.align) {
+        alignedSegs(wrapped, g, pa.align).forEach((sg) => lines.push({ kind: p.type, segs: [sg], src: p.line }));
+        return;
+      }
       wrapped.forEach((runs, k) => {
         const x = p.type === 'parenthetical' && k > 0 ? g.x + CW : g.x;
         lines.push({ kind: p.type, segs: [seg(x, runs)], src: p.line });
@@ -223,7 +288,8 @@
           if (opts.restartSceneNumbers) sceneCounter = 0;
           episode = SF.plainText(t.text).toUpperCase();
           if (opts.episodeNewPage) blocks.push({ kind: 'page_break', lines: [] });
-          const lines = wrapText(upper(t.text), EL.centered.width, { b: true, u: true }).map((runs) => ({ kind: 'episode', segs: [seg(placeX(EL.centered, runs), runs)], src: t.line }));
+          const ea = SF.paraAlign(t.text);
+          const lines = alignedSegs(wrapText(upper(ea.text), EL.centered.width, { b: true, u: true }), EL.centered, ea.align).map((sg) => ({ kind: 'episode', segs: [sg], src: t.line }));
           blocks.push({ kind: 'episode', lines, spaceBefore: 2, keepWithNext: true, episode });
           break;
         }
@@ -232,9 +298,11 @@
           sceneCounter++;
           const number = t.number || (opts.numberScenesAutomatically ? String(sceneCounter) : null);
           const style = { b: opts.boldSceneHeadings, u: opts.underlineSceneHeadings };
-          const wrapped = wrapText(upper(t.text), EL.scene_heading.width, style);
+          const sa = SF.paraAlign(t.text);
+          const wrapped = wrapText(upper(sa.text), EL.scene_heading.width, style);
+          const placed = alignedSegs(wrapped, EL.scene_heading, sa.align);
           const lines = wrapped.map((runs, k) => {
-            const segs = [seg(EL.scene_heading.x, runs)];
+            const segs = [placed[k]];
             if (k === 0 && number && opts.sceneNumbers !== 'none') {
               const nr = [{ text: number, b: false, i: false, u: false }];
               if (opts.sceneNumbers === 'left' || opts.sceneNumbers === 'both') segs.push(seg(1.25 - number.length * CW, nr));
@@ -247,8 +315,11 @@
         }
         case 'action': {
           const lines = [];
+          // one alignment marker anywhere in the paragraph applies to the whole paragraph
+          const align = t.lines.map((l) => SF.paraAlign(l.text).align).find(Boolean) || null;
           t.lines.forEach((l) => {
-            wrapText(l.text, EL.action.width).forEach((runs) => lines.push({ kind: 'action', segs: [seg(EL.action.x, runs)], src: l.line }));
+            const wrapped = wrapText(SF.paraAlign(l.text).text, EL.action.width);
+            alignedSegs(wrapped, EL.action, align).forEach((sg) => lines.push({ kind: 'action', segs: [sg], src: l.line }));
           });
           blocks.push({ kind: 'action', lines, spaceBefore: 1, splittable: true });
           break;
@@ -273,17 +344,20 @@
         }
         case 'transition': {
           lastSpeaker = null;
-          const lines = wrapText(upper(t.text), EL.transition.width).map((runs) => ({ kind: 'transition', segs: [seg(placeX(EL.transition, runs), runs)], src: t.line }));
+          const ta = SF.paraAlign(t.text);
+          const lines = alignedSegs(wrapText(upper(ta.text), EL.transition.width), EL.transition, ta.align).map((sg) => ({ kind: 'transition', segs: [sg], src: t.line }));
           blocks.push({ kind: 'transition', lines, spaceBefore: 1 });
           break;
         }
         case 'centered': {
-          const lines = wrapText(t.text, EL.centered.width).map((runs) => ({ kind: 'centered', segs: [seg(placeX(EL.centered, runs), runs)], src: t.line }));
+          const ca = SF.paraAlign(t.text);
+          const lines = alignedSegs(wrapText(ca.text, EL.centered.width), EL.centered, ca.align).map((sg) => ({ kind: 'centered', segs: [sg], src: t.line }));
           blocks.push({ kind: 'centered', lines, spaceBefore: t.continued ? 0 : 1 });
           break;
         }
         case 'lyrics': {
-          const lines = wrapText(t.text, EL.lyrics.width, { i: true }).map((runs) => ({ kind: 'lyrics', segs: [seg(EL.lyrics.x, runs)], src: t.line }));
+          const la = SF.paraAlign(t.text);
+          const lines = alignedSegs(wrapText(la.text, EL.lyrics.width, { i: true }), EL.lyrics, la.align).map((sg) => ({ kind: 'lyrics', segs: [sg], src: t.line }));
           blocks.push({ kind: 'lyrics', lines, spaceBefore: 1 });
           break;
         }

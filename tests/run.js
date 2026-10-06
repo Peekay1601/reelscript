@@ -517,6 +517,49 @@ test('Fade In and Celtx exports are well-formed zips with the expected parts', a
   assert.ok(proj.includes('http://celtx.com/NS/v1/ScriptDocument'));
 });
 
+// ---------------------------------------------------------------- Word-style formatting
+test('rich formatting markers: strike, colour, highlight parse; invisible to plain text', () => {
+  const r = SF.parseInline('A [[rs:c=#C00]]red[[rs:/c]] [[rs:s]]cut[[rs:/s]] [[rs:h=#ff0]]hi[[rs:/h]]');
+  assert.deepStrictEqual(r.map((x) => [x.text, x.c || '', x.s || false, x.h || '']), [['A ', '', false, ''], ['red', '#c00', false, ''], [' ', '', false, ''], ['cut', '', true, ''], [' ', '', false, ''], ['hi', '', false, '#ff0']]);
+  assert.strictEqual(SF.plainText('X [[rs:s]]y[[rs:/s]] [[rs:align=right]]'), 'X y ');
+  // markers never change what element a line is
+  assert.deepStrictEqual(types('INT. A - DAY [[rs:align=center]]\n\nRAVI [[rs:c=#c00]]\n(beat) [[rs:align=right]]\nHi.\n\nCUT TO: [[rs:align=left]]\n'), ['scene_heading', 'dialogue', 'transition']);
+  assert.deepStrictEqual(SF.parse('RAVI\n(beat) [[rs:align=right]]\nHi.').tokens[0].parts.map((p) => p.type), ['parenthetical', 'dialogue']);
+  // they are not Fountain notes (scripts with them still open in Script view)
+  assert.strictEqual(SF.editorFromFountain('Hi [[rs:s]]x[[rs:/s]]. [[rs:align=right]]\n').lost, false);
+});
+
+test('alignment: left / center / right / justify in the page layout', () => {
+  const words = 'word '.repeat(20).trim();
+  const lay = (a) => body(SF.layout(`${words} [[rs:align=${a}]]\n`), 0);
+  assert.strictEqual(lay('left')[0].segs[0].x, 1.5);
+  const c = lay('center');
+  const lastC = c[c.length - 1];
+  assert.ok(Math.abs(lastC.segs[0].x + (lineText(lastC).length * 0.1) / 2 - 4.5) < 0.06, 'centered in the 1.5"–7.5" column');
+  const r = lay('right');
+  assert.ok(Math.abs(r[0].segs[0].x + lineText(r[0]).length * 0.1 - 7.5) < 1e-9, 'flush right at 7.5"');
+  const j = lay('justify');
+  assert.strictEqual(lineText(j[0]).length, 60, 'justified lines fill the 60-char column');
+  assert.ok(lineText(j[j.length - 1]).length < 60, 'last line not stretched');
+  // transitions default right; can be set left
+  assert.strictEqual(body(SF.layout('CUT TO: [[rs:align=left]]\n'), 0)[0].segs[0].x, 1.5);
+});
+
+test('formatting reaches Final Draft, Word and the page editor round trip', () => {
+  const src = 'INT. A - DAY [[rs:align=center]]\n\nHi [[rs:c=#c00]]red[[rs:/c]] [[rs:s]]cut[[rs:/s]] [[rs:h=#ffeb3b]]mark[[rs:/h]]. [[rs:align=right]]\n\nRAVI\n(beat) [[rs:align=center]]\nHello [[rs:align=justify]]\n';
+  const fdx = SF.toFDX(src);
+  assert.ok(fdx.includes('<Paragraph Type="Scene Heading" Alignment="Center">'));
+  assert.ok(fdx.includes('<Text Color="#CCCC00000000">red</Text>'));
+  assert.ok(fdx.includes('<Text Style="Strikeout">cut</Text>'));
+  assert.ok(fdx.includes('<Text Background="#FFFFEBEB3B3B">mark</Text>'));
+  assert.ok(fdx.includes('<Paragraph Type="Dialogue" Alignment="Full">'));
+  const docx = Buffer.from(SF.buildDOCX(src, {})).toString('utf8');
+  ['<w:strike/>', '<w:color w:val="CC0000"/>', 'w:fill="FFEB3B"', '<w:jc w:val="both"/>', '<w:jc w:val="right"/>'].forEach((n) => assert.ok(docx.includes(n), n));
+  const sig = (m) => m.pages.map((p) => p.items.map((i) => i.segs.map((sg) => sg.x.toFixed(2) + JSON.stringify(sg.runs)).join('|')).join('\n')).join('==');
+  const { titleBlock, els } = SF.editorFromFountain(src);
+  assert.strictEqual(sig(SF.layout(SF.editorToFountain(titleBlock, els).text)), sig(SF.layout(src)));
+});
+
 // ----------------------------------------------------------------
 Promise.all(pending).then(() => {
   console.log(failures.join('\n'));

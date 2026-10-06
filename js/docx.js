@@ -107,6 +107,13 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
 
+  const hex6 = (hex) => {
+    let h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    return h.slice(0, 6).toUpperCase();
+  };
+  const JC = { left: 'left', center: 'center', right: 'right', justify: 'both' };
+
   function runs(text, extra) {
     const rs = SF.parseInline(text);
     if (!rs.length) return '';
@@ -117,6 +124,9 @@
         if (r.i || (extra && extra.i)) pr.push('<w:i/><w:iCs/>');
         if (r.u || (extra && extra.u)) pr.push('<w:u w:val="single"/>');
         if (extra && extra.caps) pr.push('<w:caps/>');
+        if (r.s) pr.push('<w:strike/>');
+        if (r.c) pr.push(`<w:color w:val="${hex6(r.c)}"/>`);
+        if (r.h) pr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${hex6(r.h)}"/>`);
         const rpr = pr.length ? `<w:rPr>${pr.join('')}</w:rPr>` : '';
         return `<w:r>${rpr}<w:t xml:space="preserve">${xmlEsc(r.text)}</w:t></w:r>`;
       })
@@ -124,7 +134,10 @@
   }
 
   function p(style, text, opts) {
-    const o = opts || {};
+    const o = Object.assign({}, opts || {});
+    const pa = SF.paraAlign(text || '');
+    text = pa.text;
+    if (pa.align && !o.jc) o.jc = JC[pa.align];
     const ppr = [`<w:pStyle w:val="${style}"/>`];
     if (o.pageBreakBefore) ppr.push('<w:pageBreakBefore/>');
     if (o.spacingBefore != null) ppr.push(`<w:spacing w:before="${o.spacingBefore}"/>`);
@@ -144,7 +157,7 @@
     const sceneRpr = '<w:caps/>' + (opts.boldSceneHeadings ? '<w:b/>' : '') + (opts.underlineSceneHeadings ? '<w:u w:val="single"/>' : '');
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${opts.font === 'courier-prime' ? 'Courier Prime' : 'Courier New'}" w:hAnsi="${opts.font === 'courier-prime' ? 'Courier Prime' : 'Courier New'}" w:eastAsia="Courier New"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault>
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New" w:eastAsia="Courier New"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault>
 <w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="${LINE}" w:lineRule="exact"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:pPr><w:widowControl/></w:pPr></w:style>
 ${styleDef('SceneHeading', 'Scene Heading', sp(sceneBefore) + '<w:keepNext/><w:keepLines/>', sceneRpr)}
@@ -208,11 +221,14 @@ ${styleDef('Header', 'Header', '<w:jc w:val="right"/>')}
           break;
         case 'action':
           // keep the paragraph's manual line breaks
-          out.push(
-            `<w:p><w:pPr><w:pStyle w:val="Action"/>${isFirst ? '<w:spacing w:before="0"/>' : ''}</w:pPr>${t.lines
-              .map((l, k) => (k ? '<w:r><w:br/></w:r>' : '') + runs(l.text))
-              .join('')}</w:p>`
-          );
+          {
+            const al = t.lines.map((l) => SF.paraAlign(l.text).align).find(Boolean);
+            out.push(
+              `<w:p><w:pPr><w:pStyle w:val="Action"/>${isFirst ? '<w:spacing w:before="0"/>' : ''}${al ? `<w:jc w:val="${JC[al]}"/>` : ''}</w:pPr>${t.lines
+                .map((l, k) => (k ? '<w:r><w:br/></w:r>' : '') + runs(SF.paraAlign(l.text).text))
+                .join('')}</w:p>`
+            );
+          }
           break;
         case 'dialogue': {
           const b = baseName(t.character);
@@ -335,7 +351,7 @@ ${styleDef('Header', 'Header', '<w:jc w:val="right"/>')}
       {
         name: '[Content_Types].xml',
         data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/><Override PartName="/word/header0.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`,
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/><Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/><Override PartName="/word/header0.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`,
       },
       {
         name: '_rels/.rels',
@@ -345,7 +361,7 @@ ${styleDef('Header', 'Header', '<w:jc w:val="right"/>')}
       {
         name: 'word/_rels/document.xml.rels',
         data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdT" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/><Relationship Id="rIdH0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header0.xml"/><Relationship Id="rIdH1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="rIdH2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/></Relationships>`,
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdT" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/><Relationship Id="rIdF" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/><Relationship Id="rIdH0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header0.xml"/><Relationship Id="rIdH1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="rIdH2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/></Relationships>`,
       },
       { name: 'word/document.xml', data: document },
       { name: 'word/styles.xml', data: stylesXml(opts) },
@@ -353,6 +369,12 @@ ${styleDef('Header', 'Header', '<w:jc w:val="right"/>')}
         name: 'word/settings.xml',
         data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="720"/><w:characterSpacingControl w:val="doNotCompress"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`,
+      },
+      {
+        // Courier Prime falls back to Courier New (fixed pitch) where it isn't installed
+        name: 'word/fontTable.xml',
+        data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:font w:name="Courier Prime"><w:altName w:val="Courier New"/><w:family w:val="modern"/><w:pitch w:val="fixed"/></w:font><w:font w:name="Courier New"><w:panose1 w:val="02070309020205020404"/><w:family w:val="modern"/><w:pitch w:val="fixed"/></w:font></w:fonts>`,
       },
       { name: 'word/header0.xml', data: hdr('') },
       { name: 'word/header1.xml', data: hdr(htxt + pageField) },

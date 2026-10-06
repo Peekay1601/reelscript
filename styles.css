@@ -285,6 +285,8 @@ a { color: var(--accent-2); }
 .page .b { font-weight: 700; }
 .page .it { font-style: italic; }
 .page .u { text-decoration: underline; text-underline-offset: 2px; }
+.page .st { text-decoration: line-through; }
+.page .u.st { text-decoration: underline line-through; }
 .page .wm {
   position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
   font: 700 80px var(--sans); color: rgba(0,0,0,.06); white-space: nowrap; overflow: hidden;
@@ -471,6 +473,10 @@ kbd { font: 12px var(--sans); padding: 1px 6px; border-radius: 5px; border: 1px 
   border-top: 1px dashed #d4d4e2; box-sizing: border-box; padding-right: 1in; text-align: right;
   font: 600 9px/1.4 var(--sans); color: #a5a5ba; pointer-events: none; text-transform: none; text-decoration: none;
 }
+.sp-el[data-align='left'] { text-align: left; }
+.sp-el[data-align='center'] { text-align: center; }
+.sp-el[data-align='right'] { text-align: right; }
+.sp-el[data-align='justify'] { text-align: justify; text-align-last: left; }
 .sp-el.sp-flash { animation: sp-flash .9s ease; }
 @keyframes sp-flash { from { background: rgba(106, 70, 255, .22); } to { background: transparent; } }
 
@@ -526,3 +532,18 @@ kbd { font: 12px var(--sans); padding: 1px 6px; border-radius: 5px; border: 1px 
 .export-menu { width: 330px; max-height: min(78vh, 720px); overflow-y: auto; }
 .menu-section { padding: 10px 10px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
 .menu button strong em { font-style: normal; font-weight: 500; color: var(--text-faint); margin-left: 4px; }
+
+/* ---------- Word-style formatting controls ---------- */
+.dd { position: relative; display: inline-flex; }
+.dd-btn .bar { position: absolute; left: 7px; right: 7px; bottom: 4px; height: 3px; border-radius: 2px; background: var(--sw); }
+.dd-btn { position: relative; }
+.dd-btn .a-glyph { font-family: Georgia, serif; font-weight: 700; font-size: 14px; margin-top: -3px; }
+.tool .caret { width: 12px; height: 12px; margin-left: 2px; }
+.dd-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 172px; padding: 8px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+.dd-title { font-size: 11px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; margin: 0 2px 8px; }
+.swatches { display: grid; grid-template-columns: repeat(6, 24px); gap: 6px; }
+.swatch-btn { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: var(--sw); display: grid; place-items: center; padding: 0; color: var(--text-faint); }
+.swatch-btn:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dd-item { display: block; width: 100%; text-align: left; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 13px; white-space: nowrap; }
+.dd-item:hover { background: var(--bg-hover); }
+.tool.active-state { color: var(--accent-2); border-color: var(--accent); background: var(--accent-soft); }

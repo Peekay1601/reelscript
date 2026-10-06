@@ -9,7 +9,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const STORE_KEY = 'reelscript.v1';
-  const APP_VERSION = '20261006-9';
+  const APP_VERSION = '20261006-10';
   SF.APP_VERSION = APP_VERSION; // keep in sync with version.json and the ?v= tags in index.html
   const ELEMENT_LABELS = {
     episode: 'Episode',
@@ -375,8 +375,9 @@
   // Rendering: pages
   // ---------------------------------------------------------------------------
   function runHTML(r) {
-    const cls = [r.b && 'b', r.i && 'it', r.u && 'u'].filter(Boolean).join(' ');
-    return cls ? `<span class="${cls}">${esc(r.text)}</span>` : esc(r.text);
+    const cls = [r.b && 'b', r.i && 'it', r.u && 'u', r.s && 'st'].filter(Boolean).join(' ');
+    const style = [r.c && `color:${r.c}`, r.h && `background:${r.h}`].filter(Boolean).join(';');
+    return cls || style ? `<span${cls ? ` class="${cls}"` : ''}${style ? ` style="${style}"` : ''}>${esc(r.text)}</span>` : esc(r.text);
   }
 
   function pageHTML(page, wm) {
@@ -633,6 +634,19 @@
     const sel = $('#el-select');
     if ([...sel.options].some((o) => o.value === type)) sel.value = type;
     $$('.tool[data-el]').forEach((b) => b.classList.toggle('current', b.dataset.el === type));
+    let align = 'left';
+    let strike = false;
+    if (isScript()) {
+      const st = se.formatState();
+      align = st.align;
+      strike = st.strike;
+    } else {
+      const v = ed().value;
+      const { start, end } = lineBounds(v, ed().selectionStart);
+      align = SF.paraAlign(v.slice(start, end)).align || DEFAULT_ALIGN(type);
+    }
+    $$('.tool[data-align]').forEach((b) => b.classList.toggle('active-state', b.dataset.align === align));
+    $('#fmt-strike').classList.toggle('active-state', !!strike);
     return idx;
   }
 
@@ -655,6 +669,89 @@
   function applyFormat(marker) {
     if (isScript()) se.format(marker === '**' ? 'b' : marker === '*' ? 'i' : 'u');
     else wrapSelection(marker);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Word-style formatting (strike, colour, highlight, alignment, case, clear)
+  // Script view uses the page editor; Fountain view writes [[rs:…]] markers.
+  // ---------------------------------------------------------------------------
+  function wrapRs(open, close) {
+    const ta = ed();
+    let { selectionStart: s, selectionEnd: e, value: v } = ta;
+    if (s === e) {
+      // no selection: the word at the caret
+      while (s > 0 && /\S/.test(v[s - 1])) s--;
+      while (e < v.length && /\S/.test(v[e])) e++;
+    }
+    if (s === e) return;
+    const sel = v.slice(s, e).replace(/\[\[rs:\/?(s|c|h)[^\]]*\]\]/g, '');
+    const text = open + sel + close;
+    replaceRange(s, e, text, s, s + text.length);
+  }
+
+  const DEFAULT_ALIGN = (type) => (type === 'transition' ? 'right' : type === 'centered' || type === 'episode' ? 'center' : 'left');
+
+  function alignTextLines(a) {
+    const ta = ed();
+    const v = ta.value;
+    const first = lineBounds(v, ta.selectionStart).start;
+    const last = lineBounds(v, ta.selectionEnd).end;
+    const types = SF.lineTypes(v);
+    let idx = lineIndexAt(v, first);
+    const lines = v.slice(first, last).split('\n').map((l) => {
+      const type = types[idx++] || 'action';
+      if (!l.trim() || type === 'title_page') return l;
+      const clean = SF.paraAlign(l).text.replace(/\s+$/, '');
+      if (a === DEFAULT_ALIGN(type)) return clean;
+      // keep "> centered <", scene "#n#" and dual "^" endings intact
+      const m = /(\s*(?:<|#[^#\s]+#|\^))$/.exec(clean);
+      return m ? clean.slice(0, m.index) + ` [[rs:align=${a}]]` + m[1] : clean + ` [[rs:align=${a}]]`;
+    });
+    const text = lines.join('\n');
+    replaceRange(first, last, text, first, first + text.length);
+  }
+
+  function caseText(t, mode) {
+    if (mode === 'upper') return t.toUpperCase();
+    if (mode === 'lower') return t.toLowerCase();
+    if (mode === 'title') return t.toLowerCase().replace(/(^|[\s(\-"“'‘])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+    return t.toLowerCase().replace(/(^\s*|[.!?]\s+)(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+  }
+
+  function fmt(kind, value) {
+    welcomeDismissed = true;
+    if (isScript()) {
+      if (kind === 'strike') se.format('s');
+      else if (kind === 'color') se.color(value);
+      else if (kind === 'highlight') se.highlight(value);
+      else if (kind === 'align') se.align(value);
+      else if (kind === 'case') se.changeCase(value);
+      else if (kind === 'clear') se.clearFormatting();
+    } else {
+      const ta = ed();
+      if (kind === 'strike') wrapRs('[[rs:s]]', '[[rs:/s]]');
+      else if (kind === 'color') value ? wrapRs(`[[rs:c=${value}]]`, '[[rs:/c]]') : wrapRs('', '');
+      else if (kind === 'highlight') value ? wrapRs(`[[rs:h=${value}]]`, '[[rs:/h]]') : wrapRs('', '');
+      else if (kind === 'align') alignTextLines(value);
+      else if (kind === 'case') {
+        const { selectionStart: s, selectionEnd: e, value: v } = ta;
+        const a = s === e ? lineBounds(v, s).start : s;
+        const b = s === e ? lineBounds(v, s).end : e;
+        const t = caseText(v.slice(a, b), value);
+        replaceRange(a, b, t, a, a + t.length);
+      } else if (kind === 'clear') {
+        const { selectionStart: s, selectionEnd: e, value: v } = ta;
+        const a = s === e ? lineBounds(v, s).start : s;
+        const b = s === e ? lineBounds(v, s).end : e;
+        const t = v.slice(a, b).replace(/\[\[rs:[^\]]*\]\]/gi, '').replace(/(\*{1,3}|_)(?=\S)([\s\S]*?\S)\1/g, '$2').replace(/[ \t]+$/gm, '');
+        replaceRange(a, b, t, a, a + t.length);
+      }
+    }
+    afterCaretMove();
+  }
+
+  function closeDropdowns() {
+    $$('.dd-menu').forEach((m) => (m.hidden = true));
   }
 
   function highlightPreview(lineIdx, scroll) {
@@ -1228,11 +1325,34 @@
         wrapSelection(k === 'b' ? '**' : k === 'i' ? '*' : '_');
         return;
       }
+      const al = { l: 'left', e: 'center', r: 'right', j: 'justify' }[k];
+      if (al) {
+        e.preventDefault();
+        fmt('align', al);
+        return;
+      }
+      if (k === 'x' && e.shiftKey) {
+        e.preventDefault();
+        fmt('strike');
+        return;
+      }
+      if (e.code === 'Space') {
+        e.preventDefault();
+        fmt('clear');
+        return;
+      }
       if (/^[0-7]$/.test(e.key)) {
         e.preventDefault();
         setElement(e.key === '0' ? 'episode' : SHORTCUT_ELEMENTS[+e.key - 1]);
         return;
       }
+    }
+    if (e.key === 'F3' && e.shiftKey) {
+      e.preventDefault();
+      const ta = ed();
+      const t = ta.value.slice(ta.selectionStart, ta.selectionEnd) || ta.value.slice(lineBounds(ta.value, ta.selectionStart).start, lineBounds(ta.value, ta.selectionStart).end);
+      fmt('case', t === t.toUpperCase() ? 'lower' : t === t.toLowerCase() ? 'title' : 'upper');
+      return;
     }
     if (e.key === 'Tab' && !mod && !e.altKey) {
       const ta = ed();
@@ -1463,6 +1583,42 @@
     $$('.tool[data-wrap]').forEach((b) => {
       b.addEventListener('mousedown', (e) => e.preventDefault());
       b.addEventListener('click', () => applyFormat(b.dataset.wrap));
+    });
+    // Word-style formatting controls keep the editor's selection (mousedown never steals focus)
+    $$('.fmt-group button, .align-group button, .dd-btn, .dd-menu button, [data-fmt]').forEach((b) => b.addEventListener('mousedown', (e) => e.preventDefault()));
+    $$('[data-fmt]').forEach((b) => b.addEventListener('click', () => fmt(b.dataset.fmt)));
+    $$('.tool[data-align]').forEach((b) => b.addEventListener('click', () => fmt('align', b.dataset.align)));
+    $$('.dd-btn').forEach((b) =>
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const m = $('#dd-' + b.dataset.dd);
+        const open = m.hidden;
+        closeDropdowns();
+        m.hidden = !open;
+      })
+    );
+    $$('[data-color]').forEach((b) =>
+      b.addEventListener('click', () => {
+        closeDropdowns();
+        if (b.dataset.color) $('#color-bar').style.setProperty('--sw', b.dataset.color);
+        fmt('color', b.dataset.color || null);
+      })
+    );
+    $$('[data-hl]').forEach((b) =>
+      b.addEventListener('click', () => {
+        closeDropdowns();
+        if (b.dataset.hl) $('#hl-bar').style.setProperty('--sw', b.dataset.hl);
+        fmt('highlight', b.dataset.hl || null);
+      })
+    );
+    $$('[data-case]').forEach((b) =>
+      b.addEventListener('click', () => {
+        closeDropdowns();
+        fmt('case', b.dataset.case);
+      })
+    );
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.dd')) closeDropdowns();
     });
     $('#el-select').addEventListener('change', (e) => {
       applyElement(e.target.value);
