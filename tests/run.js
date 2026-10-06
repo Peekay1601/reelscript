@@ -422,19 +422,29 @@ test('DOCX is a valid zip with screenplay styles', () => {
 });
 
 // ---------------------------------------------------------------- styles & importers
-test('format styles: Final Draft, Highland 2, Celtx, ReelScript presets', () => {
-  ['reelscript', 'finaldraft', 'highland', 'celtx'].forEach((k) => {
-    const st = SF.applyStyle({ ...SF.LAYOUT_DEFAULTS }, k);
-    assert.strictEqual(SF.detectStyle(st), k);
+test('format styles: 13 app presets, detected back, never touch bold', () => {
+  const keys = Object.keys(SF.STYLE_PRESETS);
+  assert.ok(keys.length >= 13);
+  ['finaldraft', 'writerduet', 'fadein', 'highland', 'arcstudio', 'celtx', 'moviemagic', 'studiobinder', 'kitscenarist', 'trelby', 'beat', 'bbc'].forEach((k) => assert.ok(keys.includes(k), k));
+  keys.forEach((k) => {
+    const st = SF.applyStyle({ ...SF.LAYOUT_DEFAULTS, boldSceneHeadings: true, boldCharacterNames: true }, k);
+    assert.strictEqual(SF.detectStyle(st), k, k);
+    assert.strictEqual(st.boldSceneHeadings, true, k + ' kept bold scene headings');
+    assert.strictEqual(st.boldCharacterNames, true, k + ' kept bold names');
+    const off = SF.applyStyle({ ...SF.LAYOUT_DEFAULTS, boldSceneHeadings: false, boldCharacterNames: false }, k);
+    assert.strictEqual(off.boldSceneHeadings, false, k + ' kept plain');
   });
   assert.strictEqual(SF.detectStyle(SF.LAYOUT_DEFAULTS), 'reelscript');
-  assert.strictEqual(SF.detectStyle({ ...SF.applyStyle({ ...SF.LAYOUT_DEFAULTS }, 'highland'), boldCharacterNames: true }), 'custom');
+  assert.strictEqual(SF.detectStyle({ ...SF.applyStyle({ ...SF.LAYOUT_DEFAULTS }, 'highland'), doubleSpaceSceneHeadings: true }), 'custom');
+  assert.strictEqual(SF.applyStyle({}, 'bbc').pageSize, 'a4');
+  const paper = SF.applyStyle(SF.applyStyle({ pageSize: 'letter' }, 'bbc'), 'finaldraft');
+  assert.strictEqual(paper.pageSize, 'letter', 'leaving BBC restores the paper');
   const src = 'INT. A - DAY\n\nBOB\nHi.\n';
-  const fd = body(SF.layout(src, SF.applyStyle({}, 'finaldraft')), 0);
-  assert.ok(fd[0].segs[0].runs.every((r) => !r.b) && fd[1].segs[0].runs.every((r) => !r.b));
-  const hl = body(SF.layout(src, SF.applyStyle({}, 'highland')), 0);
-  assert.ok(hl[0].segs[0].runs.every((r) => r.b) && hl[1].segs[0].runs.every((r) => !r.b));
-  // single vs double blank line before a scene heading
+  keys.forEach((k) => {
+    const it = body(SF.layout(src, { ...SF.applyStyle({ ...SF.LAYOUT_DEFAULTS }, k) }), 0);
+    assert.ok(it[0].segs[0].runs.every((r) => r.b), k + ': scene heading bold by default');
+    assert.ok(it[1].segs[0].runs.every((r) => r.b), k + ': name bold by default');
+  });
   const two = 'X.\n\nINT. B - DAY\n';
   const gap = (st) => { const it = body(SF.layout(two, SF.applyStyle({}, st)), 0); return Math.round((it[1].y - it[0].y) * 6); };
   assert.strictEqual(gap('finaldraft'), 3);

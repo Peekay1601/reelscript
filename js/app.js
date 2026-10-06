@@ -9,7 +9,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const STORE_KEY = 'reelscript.v1';
-  const APP_VERSION = '20261006-7';
+  const APP_VERSION = '20261006-8';
   SF.APP_VERSION = APP_VERSION; // keep in sync with version.json and the ?v= tags in index.html
   const ELEMENT_LABELS = {
     episode: 'Episode',
@@ -77,7 +77,7 @@
   const now = () => Date.now();
 
   function newScript(name, content) {
-    return { id: uid(), name: name || 'Untitled script', content: content || '', settings: { ...SF.LAYOUT_DEFAULTS, settingsVersion: 2 }, createdAt: now(), updatedAt: now() };
+    return { id: uid(), name: name || 'Untitled script', content: content || '', settings: { ...SF.LAYOUT_DEFAULTS, settingsVersion: 3 }, createdAt: now(), updatedAt: now() };
   }
 
   function load() {
@@ -97,10 +97,13 @@
       s.settings = { ...SF.LAYOUT_DEFAULTS, ...old };
       // v2: bold scene headings + bold speaker names by default. Scripts created while the
       // default was briefly "not bold" get bold back (the user never chose otherwise).
-      if (!old.settingsVersion || old.settingsVersion < 2) {
+      if (!old.settingsVersion || old.settingsVersion < 3) {
+        // v3: bold is the writer's choice, never a style's. Earlier style presets could switch it
+        // off without being asked, so turn it back on once; the Bold buttons control it from now on.
+        s.settings.style = SF.detectStyle({ ...s.settings, style: undefined });
         s.settings.boldSceneHeadings = true;
         s.settings.boldCharacterNames = true;
-        s.settings.settingsVersion = 2;
+        s.settings.settingsVersion = 3;
       }
     });
     if (!state.scripts.length) state.scripts.push(newScript('The Last Chai (sample)', SF.SAMPLE));
@@ -862,8 +865,26 @@
     if (!s) return;
     const key = SF.detectStyle(s.settings);
     $('#style-select').value = key;
+    [['#bold-scenes', 'boldSceneHeadings'], ['#bold-names', 'boldCharacterNames']].forEach(([sel, k]) => {
+      const on = s.settings[k] !== false;
+      $(sel).classList.toggle('on', on);
+      $(sel).setAttribute('aria-pressed', String(on));
+    });
     $('#pages').classList.toggle('font-courier', s.settings.font === 'courier');
     if (se) se.paper.classList.toggle('font-courier', s.settings.font === 'courier');
+  }
+
+  /** Fill both style menus (and the guide table) from SF.STYLE_PRESETS */
+  function populateStyleMenus() {
+    const opts = Object.entries(SF.STYLE_PRESETS).map(([k, p]) => `<option value="${k}">${esc(p.label)}</option>`).join('');
+    $('#style-select').innerHTML = opts + '<option value="custom" disabled>Custom</option>';
+    $('#settings-style').innerHTML = opts + '<option value="custom">Custom</option>';
+    $('#style-table').innerHTML =
+      '<table class="style-table"><thead><tr><th>Style</th><th>Font</th><th>Before a scene heading</th><th>Scene headings</th><th>Paper</th></tr></thead><tbody>' +
+      Object.values(SF.STYLE_PRESETS)
+        .map((p) => `<tr><td>${esc(p.label)}</td><td>${p.font === 'courier-prime' ? 'Courier Prime' : 'Courier'}</td><td>${p.doubleSpaceSceneHeadings ? '2 blank lines' : '1 blank line'}</td><td>CAPS${p.underlineSceneHeadings ? ', underlined' : ''}</td><td>${p.pageSize === 'a4' ? 'A4' : 'Your choice'}</td></tr>`)
+        .join('') +
+      '</tbody></table>';
   }
 
   function setStyle(key) {
@@ -873,7 +894,8 @@
     s.updatedAt = now();
     render();
     persist();
-    toast(`${SF.STYLE_PRESETS[key].label} style — ${SF.STYLE_PRESETS[key].hint}`);
+    const b = [s.settings.boldSceneHeadings && 'scene headings', s.settings.boldCharacterNames && 'names'].filter(Boolean);
+    toast(`${SF.STYLE_PRESETS[key].label} style — ${SF.STYLE_PRESETS[key].hint}.${b.length ? ` Bold ${b.join(' & ')} kept.` : ''}`, null, 6000);
   }
 
   let fontCache = null;
@@ -1023,7 +1045,8 @@
         if (el.type === 'checkbox') el.checked = !!p[k];
         else el.value = p[k];
       });
-      $('#style-hint').textContent = p.hint;
+      if (p.pageSize) f.elements.pageSize.value = p.pageSize;
+      $('#style-hint').textContent = p.hint + '. Bold is set separately.';
     });
     SF.PRESET_KEYS.forEach((k) => {
       const el = f.elements[k];
@@ -1034,6 +1057,8 @@
           const e2 = f.elements[kk];
           if (e2) vals[kk] = e2.type === 'checkbox' ? e2.checked : e2.value;
         });
+        vals.pageSize = f.elements.pageSize.value;
+        vals.style = f.elements.style.value === 'custom' ? undefined : f.elements.style.value;
         f.elements.style.value = SF.detectStyle(vals);
       });
     });
@@ -1048,6 +1073,7 @@
       s.settings[k] = el.type === 'checkbox' ? el.checked : el.value;
     });
     state.prefs.smartEnter = f.elements.smartEnter.checked;
+    s.settings.style = f.elements.style.value;
     s.updatedAt = now();
     render();
     persist();
@@ -1356,8 +1382,20 @@
     });
 
     $('#settings-btn').addEventListener('click', openSettings);
+    populateStyleMenus();
     bindSettingsStyle();
     $('#style-select').addEventListener('change', (e) => setStyle(e.target.value));
+    [['#bold-scenes', 'boldSceneHeadings', 'Scene headings'], ['#bold-names', 'boldCharacterNames', 'Character names']].forEach(([sel, k, label]) => {
+      $(sel).addEventListener('mousedown', (e) => e.preventDefault());
+      $(sel).addEventListener('click', () => {
+        const s = current();
+        s.settings[k] = s.settings[k] === false;
+        s.updatedAt = now();
+        render();
+        persist();
+        toast(`${label} ${s.settings[k] ? 'bold' : 'not bold'} — in the page, preview, PDF, Word and Final Draft files`);
+      });
+    });
     $('#settings-dialog').addEventListener('close', () => {
       if ($('#settings-dialog').returnValue === 'save') saveSettings();
     });

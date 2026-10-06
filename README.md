@@ -4,13 +4,10 @@ A browser-based screenplay editor and formatter with a live page preview and one
 
 ## Features
 
-- **Formatting styles**: pick **ReelScript**, **Final Draft**, **Highland 2** or **Celtx** from the Style menu. Each one matches that app's default output:
-  - bold or plain scene headings,
-  - bold or plain character names,
-  - one or two blank lines before a scene heading,
-  - Courier Prime or Courier.
-
-  Every option can still be changed afterwards, which shows up as "Custom". PDFs embed Courier Prime when a style uses it, so curly quotes and dashes are kept.
+- **Formatting styles** for 13 formatters: ReelScript, Final Draft, WriterDuet, Fade In, Highland 2, Arc Studio Pro, Celtx, Movie Magic Screenwriter, StudioBinder, KIT Scenarist, Trelby, Beat, and BBC / UK (A4).
+  - A style sets the font (Courier Prime or Courier), one or two blank lines before scene headings, underlining, and paper size for BBC.
+  - **Bold is never part of a style.** Every one of these apps leaves bold up to the writer, so the toolbar's **Bold: Scene headings / Names** toggles control it, and switching styles never changes them.
+  - PDFs embed Courier Prime when a style uses it.
 - **Import from other apps**:
   - Final Draft (`.fdx`)
   - Highland 2 (`.highland`, a zipped TextBundle, or its `.fountain`)

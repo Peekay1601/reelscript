@@ -39,6 +39,7 @@
   const DEFAULTS = {
     pageSize: 'letter',
     font: 'courier-prime', // courier-prime | courier
+    style: 'reelscript',
     sceneNumbers: 'none', // none | left | right | both
     boldSceneHeadings: true,
     boldCharacterNames: true,
@@ -53,26 +54,49 @@
     restartSceneNumbers: true,
   };
 
-  // Formatting styles of popular screenwriting apps (their default PDF output).
+  // Formatting styles of popular screenwriting apps (their default output).
+  // Bold scene headings / bold character names are NOT part of a style: every app below
+  // treats bold as the writer's own choice, so those two settings are never changed here.
   const STYLE_PRESETS = {
-    reelscript: { label: 'ReelScript', hint: 'Bold scene headings and character names, Courier Prime', font: 'courier-prime', boldSceneHeadings: true, boldCharacterNames: true, underlineSceneHeadings: false, doubleSpaceSceneHeadings: true, autoContd: true },
-    finaldraft: { label: 'Final Draft', hint: 'Plain caps scene headings, 2 lines before each, Courier', font: 'courier', boldSceneHeadings: false, boldCharacterNames: false, underlineSceneHeadings: false, doubleSpaceSceneHeadings: true, autoContd: true },
-    highland: { label: 'Highland 2', hint: 'Bold scene headings, Courier Prime', font: 'courier-prime', boldSceneHeadings: true, boldCharacterNames: false, underlineSceneHeadings: false, doubleSpaceSceneHeadings: false, autoContd: true },
-    celtx: { label: 'Celtx', hint: 'Plain caps scene headings, single line before each, Courier', font: 'courier', boldSceneHeadings: false, boldCharacterNames: false, underlineSceneHeadings: false, doubleSpaceSceneHeadings: false, autoContd: true },
+    reelscript: { label: 'ReelScript', app: 'ReelScript', hint: 'Courier Prime, 2 blank lines before scene headings', font: 'courier-prime', doubleSpaceSceneHeadings: true, underlineSceneHeadings: false, autoContd: true },
+    finaldraft: { label: 'Final Draft', app: 'Final Draft 13', hint: 'Courier, plain caps sluglines, 2 blank lines before scene headings, (MORE)/(CONT’D)', font: 'courier', doubleSpaceSceneHeadings: true, underlineSceneHeadings: false, autoContd: true },
+    writerduet: { label: 'WriterDuet', app: 'WriterDuet', hint: 'Courier Prime, standard industry layout', font: 'courier-prime', doubleSpaceSceneHeadings: true, underlineSceneHeadings: false, autoContd: true },
+    fadein: { label: 'Fade In', app: 'Fade In Pro', hint: 'Courier, standard industry layout', font: 'courier', doubleSpaceSceneHeadings: true, underlineSceneHeadings: false, autoContd: true },
+    highland: { label: 'Highland 2', app: 'Highland 2', hint: 'Courier Prime, single blank line before scene headings', font: 'courier-prime', doubleSpaceSceneHeadings: false, underlineSceneHeadings: false, autoContd: true },
+    arcstudio: { label: 'Arc Studio Pro', app: 'Arc Studio Pro', hint: 'Courier Prime, standard industry layout', font: 'courier-prime', doubleSpaceSceneHeadings: true, underlineSceneHeadings: false, autoContd: true },
+    celtx: { label: 'Celtx', app: 'Celtx', hint: 'Courier, single blank line before scene headings', font: 'courier', doubleSpaceSceneHeadings: false, underlineSceneHeadings: false, autoContd: true },
+    moviemagic: { label: 'Movie Magic Screenwriter', app: 'Movie Magic Screenwriter 6', hint: 'Courier, standard industry layout', font: 'courier', doubleSpaceSceneHeadings: true, underlineSceneHeadings: false, autoContd: true },
+    studiobinder: { label: 'StudioBinder', app: 'StudioBinder', hint: 'Courier, plain sluglines, standard layout', font: 'courier', doubleSpaceSceneHeadings: false, underlineSceneHeadings: false, autoContd: true },
+    kitscenarist: { label: 'KIT Scenarist', app: 'KIT Scenarist', hint: 'Courier Prime, standard layout', font: 'courier-prime', doubleSpaceSceneHeadings: true, underlineSceneHeadings: false, autoContd: true },
+    trelby: { label: 'Trelby', app: 'Trelby', hint: 'Courier, single blank line before scene headings', font: 'courier', doubleSpaceSceneHeadings: false, underlineSceneHeadings: false, autoContd: true },
+    beat: { label: 'Beat', app: 'Beat (Fountain)', hint: 'Courier Prime, Fountain-style layout', font: 'courier-prime', doubleSpaceSceneHeadings: true, underlineSceneHeadings: false, autoContd: true },
+    bbc: { label: 'BBC / UK (A4)', app: 'BBC Writersroom', hint: 'A4 paper, underlined sluglines, Courier', font: 'courier', doubleSpaceSceneHeadings: true, underlineSceneHeadings: true, autoContd: true, pageSize: 'a4' },
   };
-  const PRESET_KEYS = ['font', 'boldSceneHeadings', 'boldCharacterNames', 'underlineSceneHeadings', 'doubleSpaceSceneHeadings', 'autoContd'];
+  // Settings a style controls (bold is deliberately not one of them)
+  const PRESET_KEYS = ['font', 'underlineSceneHeadings', 'doubleSpaceSceneHeadings', 'autoContd'];
 
-  /** Which preset do these settings match? ('custom' if none) */
+  /** Which style is in use? Uses the chosen style if the settings still match it, else 'custom'. */
   function detectStyle(settings) {
     const s = Object.assign({}, DEFAULTS, settings || {});
-    const hit = Object.keys(STYLE_PRESETS).find((k) => PRESET_KEYS.every((p) => STYLE_PRESETS[k][p] === s[p]));
-    return hit || 'custom';
+    const matches = (k) => PRESET_KEYS.every((p) => STYLE_PRESETS[k][p] === s[p]) && (!STYLE_PRESETS[k].pageSize || STYLE_PRESETS[k].pageSize === s.pageSize);
+    if (s.style && STYLE_PRESETS[s.style] && matches(s.style)) return s.style;
+    if (s.style && s.style !== 'custom') return 'custom';
+    return Object.keys(STYLE_PRESETS).find(matches) || 'custom';
   }
 
   function applyStyle(settings, key) {
     const p = STYLE_PRESETS[key];
     if (!p) return settings;
     PRESET_KEYS.forEach((k) => (settings[k] = p[k]));
+    if (p.pageSize) {
+      // remember the writer's paper so leaving this style (e.g. BBC → A4) puts it back
+      if (!settings.paperBeforeStyle) settings.paperBeforeStyle = settings.pageSize || 'letter';
+      settings.pageSize = p.pageSize;
+    } else if (settings.paperBeforeStyle) {
+      settings.pageSize = settings.paperBeforeStyle;
+      delete settings.paperBeforeStyle;
+    }
+    settings.style = key;
     return settings;
   }
 
