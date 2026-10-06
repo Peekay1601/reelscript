@@ -8,21 +8,19 @@ A browser-based screenplay editor and formatter with a live page preview and one
   - A style sets the font (Courier Prime or Courier), one or two blank lines before scene headings, underlining, and paper size for BBC.
   - **Bold is never part of a style.** Every one of these apps leaves bold up to the writer, so the toolbar's **Bold: Scene headings / Names** toggles control it, and switching styles never changes them.
   - PDFs embed Courier Prime when a style uses it.
-- **Import from other apps**:
-  - Final Draft (`.fdx`)
-  - Highland 2 (`.highland`, a zipped TextBundle, or its `.fountain`)
-  - classic Celtx (`.celtx`)
-  - any screenplay **PDF** with selectable text, including Celtx's PDF export. pdf.js reads the page layout and rebuilds scene headings, action, characters, parentheticals, dialogue, transitions and the title page.
+- **Import from and export to other screenwriting apps**:
 
-- **Final Draft-style Script view**: you type straight onto a formatted page, and each paragraph is a screenplay element.
-  - **Enter** moves to the next element, as in Final Draft: Scene Heading goes to Action, Character to Dialogue, Dialogue to Action, Transition to Scene Heading.
-  - **Tab** changes the element: Action becomes Character, Character becomes Transition, and Tab at the end of a speech adds a Parenthetical.
-  - An element dropdown in the toolbar shows and sets the current element.
-  - SmartType suggests character names, INT./EXT., locations, times of day, (V.O.)/(O.S.) and transitions.
-  - Undo and redo, and printed page boundaries are marked on the page.
-- **Episodes** (Final Draft's "New Act"):
-  - Written as `EPISODE 1`, `Episode 2: Title`, `EP 04 - LOST`, `ఎపిసోడ్ 3`, `एपिसोड 5`, `ACT ONE`, or anything after `#!`.
-  - They print centered, bold and underlined, start a new page, restart scene numbers and appear in the outline.
+  | App | Import | Export |
+  |---|---|---|
+  | Final Draft | `.fdx` | `.fdx` |
+  | Fade In | `.fadein` (Open Screenplay Format) | `.fadein` |
+  | Highland 2 | `.highland` (zipped TextBundle), `.fountain` | `.highland` |
+  | Celtx | `.celtx` (classic zip with script HTML), or Celtx online's PDF / `.fdx` | `.celtx` |
+  | Trelby | `.trelby` | `.trelby` |
+  | WriterDuet, Arc Studio Pro, Movie Magic Screenwriter, StudioBinder, KIT Scenarist | their `.fdx` / `.fountain` / PDF exports | `.fdx` (each app's Final Draft import) |
+  | Beat, Slugline | `.fountain` | `.fountain` |
+  | Any app | PDF with selectable text | PDF, Word `.docx` |
+
 - **Paste from ChatGPT** or other AI chats: Markdown such as `## EPISODE 01 — "TITLE"`, `### EXT. PLACE – NIGHT`, `**KARTHIK**`, `**KARTHIK — O.S.**` and `**CUT TO BLACK.**` is converted into a proper script.
   - The title page is built from the `#` title, "Written by", Format and Genre.
   - ChatGPT's commentary (intro, "Dramatic movement", "Emotional high", closing notes) is left out, or kept as hidden notes if you choose.
@@ -63,6 +61,7 @@ A browser-based screenplay editor and formatter with a live page preview and one
 | `js/parser.js` | Fountain parser, inline emphasis, smart clean-up, title-page helpers |
 | `js/layout.js` | Geometry and pagination → page model (inches) |
 | `js/export.js` | PDF (jsPDF), Final Draft export/import |
+| `js/formats.js` | Highland 2, Fade In, Celtx, Trelby writers (+ Fade In / Trelby readers) |
 | `js/importers.js` | Highland 2, Celtx, PDF (pdf.js) and other importers; tiny ZIP reader |
 | `js/markdown.js` | ChatGPT / Markdown → Fountain converter |
 | `js/docx.js` | Word .docx writer (includes a tiny ZIP writer) |

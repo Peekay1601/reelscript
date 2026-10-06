@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261006-8">
+  <link rel="stylesheet" href="styles.css?v=20261006-9">
   <style id="print-page-size">@page { size: 8.5in 11in; margin: 0; }</style>
 </head>
 <body>
@@ -26,8 +26,8 @@
       </div>
 
       <button class="btn btn-primary btn-block" id="new-script"><svg class="i"><use href="#i-plus"/></svg>New script</button>
-      <button class="btn btn-ghost btn-block" id="import-btn" title="Final Draft (.fdx), Highland 2 (.highland), Celtx (.celtx or its PDF), any screenplay PDF, Fountain, text"><svg class="i"><use href="#i-upload"/></svg>Import Final Draft · Highland · Celtx · PDF</button>
-      <input type="file" id="import-file" accept=".fountain,.spmd,.txt,.md,.markdown,.fdx,.highland,.celtx,.pdf,.html,.htm,text/plain,application/pdf" hidden>
+      <button class="btn btn-ghost btn-block" id="import-btn" title="Final Draft .fdx, Fade In .fadein, Highland 2 .highland, Celtx .celtx, Trelby .trelby, any screenplay PDF, Fountain, text"><svg class="i"><use href="#i-upload"/></svg>Import from any app</button>
+      <input type="file" id="import-file" accept=".fountain,.spmd,.txt,.md,.markdown,.fdx,.fdxt,.highland,.celtx,.fadein,.trelby,.pdf,.html,.htm,text/plain,application/pdf" hidden>
 
       <label class="search">
         <svg class="i"><use href="#i-search"/></svg>
@@ -70,12 +70,24 @@
 
         <div class="menu-wrap">
           <button class="btn btn-primary" id="export-btn" aria-haspopup="menu" aria-expanded="false"><svg class="i"><use href="#i-download"/></svg><span>Export</span></button>
-          <div class="menu" id="export-menu" role="menu" hidden>
-            <button role="menuitem" data-export="pdf"><svg class="i"><use href="#i-file"/></svg><span><strong>PDF</strong><small>Industry-standard, print ready</small></span></button>
-            <button role="menuitem" data-export="print"><svg class="i"><use href="#i-printer"/></svg><span><strong>Print / Save as PDF</strong><small>Uses your browser, any language</small></span></button>
-            <button role="menuitem" data-export="docx"><svg class="i"><use href="#i-doc"/></svg><span><strong>Word (.docx)</strong><small>Editable in Word, Google Docs, Pages</small></span></button>
-            <button role="menuitem" data-export="fdx"><svg class="i"><use href="#i-film"/></svg><span><strong>Final Draft (.fdx)</strong><small>Open in Final Draft, WriterDuet…</small></span></button>
-            <button role="menuitem" data-export="fountain"><svg class="i"><use href="#i-code"/></svg><span><strong>Fountain (.fountain)</strong><small>Plain-text screenplay source</small></span></button>
+          <div class="menu export-menu" id="export-menu" role="menu" hidden>
+            <div class="menu-section">Documents</div>
+            <button role="menuitem" data-export="pdf"><svg class="i"><use href="#i-file"/></svg><span><strong>PDF</strong><small>Print-ready, in your chosen style</small></span></button>
+            <button role="menuitem" data-export="print"><svg class="i"><use href="#i-printer"/></svg><span><strong>Print / Save as PDF</strong><small>Through your browser, keeps every language</small></span></button>
+            <button role="menuitem" data-export="docx"><svg class="i"><use href="#i-doc"/></svg><span><strong>Word (.docx)</strong><small>Word, Google Docs, Pages</small></span></button>
+            <div class="menu-section">Open in a screenwriting app</div>
+            <button role="menuitem" data-export="fdx"><svg class="i"><use href="#i-film"/></svg><span><strong>Final Draft <em>.fdx</em></strong><small>Native Final Draft file</small></span></button>
+            <button role="menuitem" data-export="writerduet"><svg class="i"><use href="#i-film"/></svg><span><strong>WriterDuet <em>.fdx</em></strong><small>WriterDuet's recommended import format</small></span></button>
+            <button role="menuitem" data-export="fadein"><svg class="i"><use href="#i-film"/></svg><span><strong>Fade In <em>.fadein</em></strong><small>Fade In's native format (Open Screenplay Format)</small></span></button>
+            <button role="menuitem" data-export="highland"><svg class="i"><use href="#i-film"/></svg><span><strong>Highland 2 <em>.highland</em></strong><small>Highland 2's native format</small></span></button>
+            <button role="menuitem" data-export="arcstudio"><svg class="i"><use href="#i-film"/></svg><span><strong>Arc Studio Pro <em>.fdx</em></strong><small>Import in Arc Studio</small></span></button>
+            <button role="menuitem" data-export="celtx"><svg class="i"><use href="#i-film"/></svg><span><strong>Celtx <em>.celtx</em></strong><small>Celtx project (Celtx online also takes .fdx)</small></span></button>
+            <button role="menuitem" data-export="moviemagic"><svg class="i"><use href="#i-film"/></svg><span><strong>Movie Magic Screenwriter <em>.fdx</em></strong><small>Screenwriter 6.3+ imports Final Draft files</small></span></button>
+            <button role="menuitem" data-export="studiobinder"><svg class="i"><use href="#i-film"/></svg><span><strong>StudioBinder <em>.fdx</em></strong><small>Import in StudioBinder</small></span></button>
+            <button role="menuitem" data-export="kitscenarist"><svg class="i"><use href="#i-film"/></svg><span><strong>KIT Scenarist <em>.fdx</em></strong><small>Import in KIT Scenarist</small></span></button>
+            <button role="menuitem" data-export="trelby"><svg class="i"><use href="#i-film"/></svg><span><strong>Trelby <em>.trelby</em></strong><small>Trelby's native format</small></span></button>
+            <button role="menuitem" data-export="beat"><svg class="i"><use href="#i-code"/></svg><span><strong>Beat / Slugline <em>.fountain</em></strong><small>Native Fountain apps</small></span></button>
+            <button role="menuitem" data-export="fountain"><svg class="i"><use href="#i-code"/></svg><span><strong>Fountain <em>.fountain</em></strong><small>Plain text, opens almost anywhere</small></span></button>
           </div>
         </div>
       </header>
@@ -150,7 +162,7 @@
                   <button class="card" data-welcome="write"><svg class="i"><use href="#i-pen"/></svg><strong>Start writing</strong><span>Blank page, Fountain syntax</span></button>
                   <button class="card" data-welcome="sample"><svg class="i"><use href="#i-film"/></svg><strong>Open a sample</strong><span>See every element in action</span></button>
                   <button class="card" data-welcome="paste"><svg class="i"><use href="#i-sparkles"/></svg><strong>Paste from ChatGPT</strong><span>Or any messy script: we'll format it</span></button>
-                  <button class="card" data-welcome="import"><svg class="i"><use href="#i-upload"/></svg><strong>Import a file</strong><span>Final Draft, Highland, Celtx, PDF</span></button>
+                  <button class="card" data-welcome="import"><svg class="i"><use href="#i-upload"/></svg><strong>Import a file</strong><span>Final Draft, Fade In, Highland, Celtx, Trelby, PDF</span></button>
                 </div>
               </div>
             </div>
@@ -320,8 +332,24 @@
         <p class="muted">Pick <strong>Style</strong> at the top or in Page settings. A style sets the font, the spacing before scene headings, underlining and paper size, matching each app's default output. <strong>Bold scene headings</strong> and <strong>bold names</strong> are your own choice: use the Bold buttons in the toolbar, and no style will change them. Every app below makes bold optional.</p>
         <div id="style-table"></div>
         <p class="muted">All styles use the same industry page layout: 1.5″ left margin, dialogue at 2.5″, parentheticals at 3.1″, character names at 3.7″, transitions flush right, page numbers top right, about one page per minute.</p>
-        <h3>Importing</h3>
-        <p class="muted"><strong>Final Draft</strong> .fdx · <strong>Highland 2</strong> .highland (or its .fountain) · <strong>Celtx</strong> .celtx from desktop Celtx. Celtx online only exports PDF or .fdx, so import either of those. <strong>PDF</strong> from any screenwriting app works if its text is selectable (not a scan). Use Import in the sidebar, or drag a file onto the page.</p>
+        <h3>Importing and exporting</h3>
+        <table>
+          <thead><tr><th>App</th><th>Import (sidebar → Import)</th><th>Export (Export menu)</th></tr></thead>
+          <tbody>
+            <tr><td>Final Draft</td><td>.fdx</td><td>.fdx</td></tr>
+            <tr><td>WriterDuet</td><td>its .fdx, .fountain or PDF export</td><td>.fdx (recommended by WriterDuet)</td></tr>
+            <tr><td>Fade In</td><td>.fadein, .fdx</td><td>.fadein</td></tr>
+            <tr><td>Highland 2</td><td>.highland, .fountain</td><td>.highland</td></tr>
+            <tr><td>Arc Studio Pro</td><td>its .fdx, .fountain or PDF export</td><td>.fdx</td></tr>
+            <tr><td>Celtx</td><td>.celtx (desktop); Celtx online's PDF or .fdx</td><td>.celtx</td></tr>
+            <tr><td>Movie Magic Screenwriter</td><td>its .fdx (6.5) or PDF</td><td>.fdx (Screenwriter 6.3+)</td></tr>
+            <tr><td>StudioBinder</td><td>its PDF or .fdx</td><td>.fdx</td></tr>
+            <tr><td>KIT Scenarist</td><td>its .fdx, .fountain or .trelby</td><td>.fdx</td></tr>
+            <tr><td>Trelby</td><td>.trelby</td><td>.trelby</td></tr>
+            <tr><td>Beat, Slugline</td><td>.fountain</td><td>.fountain</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">A <strong>PDF</strong> from any app imports if its text can be selected (not a scan). PDFs only keep the layout, so check the result. You can also drag a file onto the page.</p>
         <h3>About the PDF</h3>
         <p class="muted">Courier 12pt, 1.5″ left margin, 1″ top/bottom, dialogue at 2.5″, character cues at 3.7″, about one page per minute of screen time. Long speeches break across pages with (MORE) and (CONT'D); scene headings are never stranded at the bottom of a page. Scripts in non-Latin scripts (Hindi, Telugu, Tamil…) should use <em>Print / Save as PDF</em>, which keeps every character.</p>
       </div>
@@ -358,15 +386,16 @@
     </defs>
   </svg>
 
-  <script src="vendor/jspdf.umd.min.js?v=20261006-8" defer></script>
-  <script src="js/parser.js?v=20261006-8" defer></script>
-  <script src="js/layout.js?v=20261006-8" defer></script>
-  <script src="js/export.js?v=20261006-8" defer></script>
-  <script src="js/markdown.js?v=20261006-8" defer></script>
-  <script src="js/docx.js?v=20261006-8" defer></script>
-  <script src="js/importers.js?v=20261006-8" defer></script>
-  <script src="js/editor.js?v=20261006-8" defer></script>
-  <script src="js/sample.js?v=20261006-8" defer></script>
-  <script src="js/app.js?v=20261006-8" defer></script>
+  <script src="vendor/jspdf.umd.min.js?v=20261006-9" defer></script>
+  <script src="js/parser.js?v=20261006-9" defer></script>
+  <script src="js/layout.js?v=20261006-9" defer></script>
+  <script src="js/export.js?v=20261006-9" defer></script>
+  <script src="js/markdown.js?v=20261006-9" defer></script>
+  <script src="js/docx.js?v=20261006-9" defer></script>
+  <script src="js/importers.js?v=20261006-9" defer></script>
+  <script src="js/formats.js?v=20261006-9" defer></script>
+  <script src="js/editor.js?v=20261006-9" defer></script>
+  <script src="js/sample.js?v=20261006-9" defer></script>
+  <script src="js/app.js?v=20261006-9" defer></script>
 </body>
 </html>

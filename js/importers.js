@@ -340,6 +340,14 @@
       const conv = SF.looksMarkdown(raw) ? SF.convertPasted(raw) : { text: SF.normalize(raw), info: null };
       return { name, text: conv.text, info: conv.info || `Imported from Highland 2 · “${name}”`, source: 'Highland 2' };
     }
+    if (ext === 'trelby') {
+      const t = SF.fromTrelby(await readAs(file, 'text'));
+      return { name, text: t, info: `Imported from Trelby · “${name}”`, source: 'Trelby' };
+    }
+    if (ext === 'fadein') {
+      const t = await SF.fromFadeIn(await readAs(file, 'buffer'));
+      return { name, text: t, info: `Imported from Fade In · “${name}”`, source: 'Fade In' };
+    }
     if (ext === 'celtx') {
       const t = await fromCeltx(await readAs(file, 'buffer'));
       return { name, text: t, info: `Imported from Celtx · “${name}”`, source: 'Celtx' };

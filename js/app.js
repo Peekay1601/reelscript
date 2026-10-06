@@ -9,7 +9,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const STORE_KEY = 'reelscript.v1';
-  const APP_VERSION = '20261006-8';
+  const APP_VERSION = '20261006-9';
   SF.APP_VERSION = APP_VERSION; // keep in sync with version.json and the ?v= tags in index.html
   const ELEMENT_LABELS = {
     episode: 'Episode',
@@ -833,7 +833,8 @@
     return indented >= 3 || chat >= 2 || artefacts || tight || SF.looksMarkdown(text);
   }
 
-  const SOURCE_STYLE = { 'Final Draft': 'finaldraft', 'Highland 2': 'highland', Celtx: 'celtx' };
+  const SOURCE_STYLE = { 'Final Draft': 'finaldraft', 'Highland 2': 'highland', Celtx: 'celtx', 'Fade In': 'fadein', Trelby: 'trelby' };
+  const FDX_APPS = { writerduet: 'WriterDuet', arcstudio: 'Arc Studio Pro', moviemagic: 'Movie Magic Screenwriter', studiobinder: 'StudioBinder', kitscenarist: 'KIT Scenarist' };
 
   async function importFile(file) {
     if (!file) return;
@@ -934,6 +935,24 @@
         console.error(e);
         toast('Word export failed.');
       }
+    } else if (FDX_APPS[kind]) {
+      download(`${base}.fdx`, SF.toFDX(s.content, s.settings), 'application/xml;charset=utf-8');
+      toast(`Final Draft file for ${FDX_APPS[kind]} downloaded — import it there`, null, 6000);
+    } else if (kind === 'highland') {
+      download(`${base}.highland`, new Blob([SF.toHighland(s.content, s.name)], { type: 'application/zip' }), 'application/zip');
+      toast('Highland 2 file downloaded');
+    } else if (kind === 'fadein') {
+      download(`${base}.fadein`, new Blob([SF.toFadeIn(s.content, s.name)], { type: 'application/zip' }), 'application/zip');
+      toast('Fade In file downloaded');
+    } else if (kind === 'celtx') {
+      download(`${base}.celtx`, new Blob([SF.toCeltx(s.content, s.name)], { type: 'application/zip' }), 'application/zip');
+      toast('Celtx file downloaded');
+    } else if (kind === 'trelby') {
+      download(`${base}.trelby`, SF.toTrelby(s.content), 'text/plain;charset=utf-8');
+      toast('Trelby file downloaded');
+    } else if (kind === 'beat') {
+      download(`${base}.fountain`, s.content, 'text/plain;charset=utf-8');
+      toast('Fountain file for Beat / Slugline downloaded');
     } else if (kind === 'fdx') {
       download(`${base}.fdx`, SF.toFDX(s.content, s.settings), 'application/xml;charset=utf-8');
       toast('Final Draft file downloaded');

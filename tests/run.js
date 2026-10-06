@@ -5,7 +5,7 @@
 'use strict';
 const path = require('path');
 const assert = require('assert');
-['parser', 'layout', 'export', 'docx', 'markdown', 'editor', 'importers', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
+['parser', 'layout', 'export', 'docx', 'markdown', 'editor', 'importers', 'formats', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
 const SF = globalThis.SF;
 
 let passed = 0;
@@ -462,6 +462,59 @@ test('Highland 2: .highland zip (deflated TextBundle) imports its text.fountain'
   assert.ok(files.has('x.textbundle/text.fountain'));
   const t = await SF.fromHighland(buf);
   assert.deepStrictEqual(types(t), ['scene_heading', 'action', 'dialogue']);
+});
+
+// ---------------------------------------------------------------- other apps' native formats
+const shape = (src) => SF.parse(src).tokens.filter((t) => !['note', 'page_break'].includes(t.type)).map((t) => (t.type === 'dual_dialogue' ? 'dialogue,dialogue' : t.type === 'centered' ? 'action' : t.type)).join(',');
+
+test('Trelby: export follows Trelby\'s file rules and imports back', () => {
+  const out = SF.toTrelby(SF.SAMPLE);
+  const lines = out.replace(/^\uFEFF/, '').split('\n').filter(Boolean);
+  assert.strictEqual(lines[0], '#Version 3');
+  const start = lines.indexOf('#Start-Script ');
+  assert.ok(start > 0);
+  let prev = null;
+  lines.slice(start + 1).forEach((l) => {
+    assert.ok('>|.'.includes(l[0]), 'linebreak char ' + l);
+    assert.ok('\\._:(/=@%'.includes(l[1]), 'element char ' + l);
+    if (prev) assert.strictEqual(l[1], prev, 'element type changes only after "."');
+    prev = l[0] === '.' ? null : l[1];
+  });
+  assert.strictEqual(shape(SF.fromTrelby(out)), shape(SF.SAMPLE).replace('dialogue,dialogue,action,transition,episode', 'dialogue,dialogue,action,transition,episode'));
+  // Trelby v1 file (as shipped in Trelby's repo): wrapped lines, forced breaks, notes
+  const v1 = '\uFEFF#Version 1\n.\\INT. WAREHOUSE - NIGHT\n>.JIM stands in\n..the middle.\n._JIM\n.((beat)\n>:What are you\n.:doing?\n|.Line one\n..line two\n.%A note\n./CUT TO:\n';
+  const t = SF.fromTrelby(v1);
+  assert.ok(t.includes('JIM stands in the middle.'));
+  assert.ok(t.includes('What are you doing?'));
+  assert.ok(t.includes('Line one\nline two'));
+  assert.ok(t.includes('[[A note]]'));
+  assert.strictEqual(shape(t), 'scene_heading,action,dialogue,action,transition');
+});
+
+test('Highland 2: .highland export is a TextBundle that imports back', async () => {
+  const zipBytes = SF.toHighland(SF.SAMPLE, 'The Last Chai');
+  const files = await SF.unzip(zipBytes);
+  assert.ok(files.has('The Last Chai.textbundle/text.fountain'));
+  assert.ok(files.has('The Last Chai.textbundle/info.json'));
+  assert.strictEqual(shape(await SF.fromHighland(zipBytes)), shape(SF.SAMPLE));
+});
+
+test('Fade In and Celtx exports are well-formed zips with the expected parts', async () => {
+  const fi = await SF.unzip(SF.toFadeIn(SF.SAMPLE, 'x'));
+  const xml = new TextDecoder().decode(fi.get('document.xml'));
+  assert.ok(xml.includes('<document type="Open Screenplay Format document"'));
+  assert.ok(xml.includes('<para><style basestylename="Scene Heading" number="1"/><text>EXT. MUMBAI LOCAL TRAIN STATION - NIGHT</text></para>'));
+  assert.ok(/<para><style basestylename="Character"\/><text>MEERA<\/text><\/para>/.test(xml));
+  assert.ok(!/^\s*<para page_break/m.test(xml.split('<paragraphs>')[1].split('\n')[1]), 'no page break before the first paragraph');
+  const cx = await SF.unzip(SF.toCeltx(SF.SAMPLE, 'x'));
+  const names = [...cx.keys()];
+  assert.ok(names.includes('project.rdf') && names.includes('local.rdf') && names.some((n) => /^script-\w+\.html$/.test(n)));
+  const html = new TextDecoder().decode(cx.get(names.find((n) => /^script-/.test(n))));
+  assert.ok(html.includes('<p class="sceneheading">EXT. MUMBAI LOCAL TRAIN STATION - NIGHT<br>'));
+  assert.ok(html.includes('<p class="dialog">'));
+  const proj = new TextDecoder().decode(cx.get('project.rdf'));
+  assert.ok(proj.includes('cx:localFile="' + names.find((n) => /^script-/.test(n)) + '"'));
+  assert.ok(proj.includes('http://celtx.com/NS/v1/ScriptDocument'));
 });
 
 // ----------------------------------------------------------------
