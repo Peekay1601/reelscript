@@ -9,7 +9,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const STORE_KEY = 'reelscript.v1';
-  const APP_VERSION = '20261006-10';
+  const APP_VERSION = '20261006-11';
   SF.APP_VERSION = APP_VERSION; // keep in sync with version.json and the ?v= tags in index.html
   const ELEMENT_LABELS = {
     episode: 'Episode',
@@ -116,7 +116,8 @@
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({ scripts: state.scripts, currentId: state.currentId, prefs: state.prefs }));
       lastSave = now();
-      setSaveState('Saved');
+      setSaveState(lastAutosave ? `Saved · auto-saved ${clock(lastAutosave)}` : 'Saved');
+      if (linked(current())) updateFileUi();
       return true;
     } catch (e) {
       setSaveState('Not saved — browser storage is full or blocked. Export a copy!', true);
@@ -859,6 +860,7 @@
     $('#doc-title').value = s.name;
     document.title = `${s.name || 'Untitled script'} — ReelScript`;
     $('#preview-scroll').scrollTop = 0;
+    refreshLink(s);
     updateWelcome();
     renderList();
     render();
@@ -898,6 +900,9 @@
       ],
     });
     if (v !== 'delete') return;
+    SF.Files.deleteDrafts(id).catch(() => null);
+    SF.Files.removeHandle(id);
+    delete fileState[id];
     state.scripts = state.scripts.filter((x) => x.id !== id);
     if (!state.scripts.length) state.scripts.push(newScript());
     if (state.currentId === id) openScript(state.scripts.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0].id);
@@ -933,8 +938,8 @@
   const SOURCE_STYLE = { 'Final Draft': 'finaldraft', 'Highland 2': 'highland', Celtx: 'celtx', 'Fade In': 'fadein', Trelby: 'trelby' };
   const FDX_APPS = { writerduet: 'WriterDuet', arcstudio: 'Arc Studio Pro', moviemagic: 'Movie Magic Screenwriter', studiobinder: 'StudioBinder', kitscenarist: 'KIT Scenarist' };
 
-  async function importFile(file) {
-    if (!file) return;
+  async function importFile(file, note) {
+    if (!file) return null;
     toast(`Importing “${file.name}”…`, null, 20000);
     let res;
     try {
@@ -942,17 +947,19 @@
     } catch (e) {
       console.error(e);
       toast(e.message || 'Could not import that file.', null, 8000);
-      return;
+      return null;
     }
     const s = createScript(res.name, res.text);
     autoName();
     const style = SOURCE_STYLE[res.source];
+    const msg = (res.info || `Imported “${res.name}”`).replace(/([^.!?…])$/, '$1.') + (note ? ' ' + note : '');
     if (style && SF.detectStyle(s.settings) !== style) {
       const label = SF.STYLE_PRESETS[style].label;
-      toast(res.info || `Imported “${res.name}”`, { label: `Use ${label} style`, run: () => setStyle(style) }, 12000);
-    } else if (!res.info && looksMessy(res.text)) {
+      toast(msg, { label: `Use ${label} style`, run: () => setStyle(style) }, 12000);
+    } else if (!res.info && !note && looksMessy(res.text)) {
       toast('This looks like pasted or exported text.', { label: 'Smart clean-up', run: runCleanup });
-    } else toast(res.info || `Imported “${res.name}”`, null, 7000);
+    } else toast(msg, null, 8000);
+    return s;
   }
 
   // ---------------------------------------------------------------------------
@@ -1311,6 +1318,250 @@
   function closeExportMenu() {
     $('#export-menu').hidden = true;
     $('#export-btn').setAttribute('aria-expanded', 'false');
+    $('#save-menu').hidden = true;
+    $('#save-btn').setAttribute('aria-expanded', 'false');
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Save to the computer + a draft every minute
+  // ---------------------------------------------------------------------------
+  const AUTOSAVE_MS = 60000;
+  const fileState = {}; // scriptId → { handle, ok } — ok=false: the browser needs a click to allow writing again
+  const draftMark = {}; // scriptId → content of the newest draft we know about
+  let lastAutosave = 0;
+
+  const clock = (t) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const linked = (s) => (s && fileState[s.id] && fileState[s.id].handle) || null;
+  const fileDirty = (s) => !!linked(s) && (s.fileSavedAt || 0) < s.updatedAt;
+
+  async function refreshLink(s) {
+    if (!(s.id in fileState)) {
+      fileState[s.id] = {};
+      const h = await SF.Files.getHandle(s.id);
+      if (h) fileState[s.id] = { handle: h, ok: await SF.Files.hasPermission(h, false) };
+    }
+    if (s === current()) updateFileUi();
+  }
+
+  function updateFileUi() {
+    const s = current();
+    const h = linked(s);
+    const st = (s && fileState[s.id]) || {};
+    const chip = $('#file-chip');
+    chip.hidden = !h;
+    if (h) {
+      const dirty = fileDirty(s);
+      chip.classList.toggle('warn', st.ok === false);
+      $('#file-chip-name').textContent = st.ok === false ? `Reconnect ${h.name}` : h.name + (dirty ? ' •' : '');
+      chip.title =
+        st.ok === false
+          ? `Click to let ReelScript keep saving to “${h.name}” (the browser asks again after a restart)`
+          : `Saved to “${h.name}” on your computer${s.fileSavedAt ? ' at ' + clock(s.fileSavedAt) : ''}${dirty ? ' — new changes save within a minute' : ''}. Click to save now.`;
+    }
+    $('#save-item-hint').textContent = h ? `Saves to “${h.name}”` : SF.Files.canPickFiles() ? 'Choose a folder the first time, then save there' : 'Downloads a .fountain file';
+    $('#save-unlink').hidden = !h;
+    if (h) $('#save-unlink-hint').textContent = `Keeps the file; this script stays saved in the browser`;
+    const notes = [];
+    if (!SF.Files.canPickFiles()) notes.push('This browser can’t save straight into a folder, so Save downloads a file. Chrome or Edge on a computer let you pick the folder and keep saving to it.');
+    notes.push(lastAutosave ? `Last auto-save ${clock(lastAutosave)} · every minute` : 'Auto-save runs every minute');
+    $('#save-note').textContent = notes.join(' ');
+  }
+
+  /** Write a script into its linked file. ask=true may show the browser's permission prompt (needs a click). */
+  async function writeLinked(s, ask) {
+    const st = fileState[s.id];
+    if (!st || !st.handle) return false;
+    if (!(await SF.Files.hasPermission(st.handle, ask))) {
+      st.ok = false;
+      updateFileUi();
+      return false;
+    }
+    if (s === current()) s.content = content();
+    const at = now();
+    try {
+      await SF.Files.writeFile(st.handle, s);
+    } catch (e) {
+      console.error(e);
+      st.ok = false;
+      updateFileUi();
+      return false;
+    }
+    st.ok = true;
+    s.fileSavedAt = at;
+    persist();
+    updateFileUi();
+    return true;
+  }
+
+  async function addDraftIfChanged(s) {
+    if (!s.content.trim()) return false;
+    if (!(s.id in draftMark)) {
+      const last = await SF.Files.latestDraft(s.id);
+      draftMark[s.id] = last ? last.content : null;
+    }
+    if (draftMark[s.id] === s.content) return false;
+    await SF.Files.addDraft(s);
+    draftMark[s.id] = s.content;
+    return true;
+  }
+
+  let autosaving = false;
+  async function autosave() {
+    if (autosaving) return;
+    autosaving = true;
+    try {
+      const s = current();
+      if (s) s.content = content();
+      for (const x of state.scripts) {
+        try {
+          await addDraftIfChanged(x);
+        } catch (e) {
+          /* IndexedDB blocked (private mode): drafts unavailable, the browser copy still saves */
+        }
+        if (fileDirty(x) && fileState[x.id].ok !== false) await writeLinked(x, false);
+      }
+      lastAutosave = now();
+      persist();
+      updateFileUi();
+    } finally {
+      autosaving = false;
+    }
+  }
+
+  function downloadCopy(s) {
+    download(`${slug(s.name)}.fountain`, s.content, 'text/plain;charset=utf-8');
+    toast(`Downloaded “${slug(s.name)}.fountain”. To choose the folder each time, turn on “Ask where to save each file” in your browser’s download settings.`, null, 10000);
+  }
+
+  async function saveAs() {
+    closeExportMenu();
+    const s = current();
+    s.content = content();
+    persist();
+    addDraftIfChanged(s).catch(() => null);
+    if (!SF.Files.canPickFiles()) return downloadCopy(s);
+    const old = linked(s);
+    let h;
+    try {
+      h = await SF.Files.pickSaveLocation(s, old ? SF.Files.extOf(old.name) : 'fountain');
+    } catch (e) {
+      console.error(e);
+      toast('The save dialog could not open here, so a copy was downloaded instead.', null, 7000);
+      return downloadCopy(s);
+    }
+    if (!h) return; // cancelled
+    fileState[s.id] = { handle: h, ok: true };
+    await SF.Files.setHandle(s.id, h);
+    if (await writeLinked(s, true)) toast(`Saved “${h.name}”. Save (Ctrl+S) and the every-minute auto-save now write to this file.`, null, 8000);
+    else toast(`Couldn’t write “${h.name}”. Try another folder.`, { label: 'Save as…', run: saveAs }, 8000);
+  }
+
+  async function saveNow() {
+    closeExportMenu();
+    const s = current();
+    s.content = content();
+    persist();
+    addDraftIfChanged(s).catch(() => null);
+    const h = linked(s);
+    if (!h) return saveAs();
+    if (await writeLinked(s, true)) toast(`Saved to “${h.name}”`);
+    else toast(`Couldn’t save to “${h.name}” — it may have been moved or the browser blocked it.`, { label: 'Save as…', run: saveAs }, 9000);
+  }
+
+  async function openFromComputer() {
+    closeExportMenu();
+    if (!SF.Files.canPickFiles()) return $('#import-file').click();
+    let h;
+    try {
+      h = await SF.Files.pickOpenFile();
+    } catch (e) {
+      return $('#import-file').click();
+    }
+    if (!h) return;
+    const writeBack = SF.Files.canWriteBack(h.name);
+    const s = await importFile(await h.getFile(), writeBack ? 'Save writes back to this file.' : 'Opened as a copy — use Save as… to choose where to save it.');
+    if (!s || !writeBack) return;
+    fileState[s.id] = { handle: h, ok: await SF.Files.hasPermission(h, false) };
+    await SF.Files.setHandle(s.id, h);
+    s.fileSavedAt = now();
+    persist();
+    updateFileUi();
+  }
+
+  async function unlinkFile() {
+    closeExportMenu();
+    const s = current();
+    const h = linked(s);
+    if (!h) return;
+    await SF.Files.removeHandle(s.id);
+    fileState[s.id] = {};
+    delete s.fileSavedAt;
+    persist();
+    updateFileUi();
+    toast(`No longer saving to “${h.name}”. The file stays on your computer.`);
+  }
+
+  async function onFileChip() {
+    const s = current();
+    const st = fileState[s.id] || {};
+    if (st.ok === false) {
+      if (await writeLinked(s, true)) toast(`Reconnected — saving to “${st.handle.name}” again`);
+      else toast('The browser didn’t allow it.', { label: 'Save as…', run: saveAs }, 8000);
+    } else saveNow();
+  }
+
+  const whenLabel = (t) => {
+    const d = new Date(t);
+    const today = new Date().toDateString() === d.toDateString();
+    return today ? `Today, ${clock(t)}` : d.toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+
+  let historyDrafts = [];
+  async function renderHistory() {
+    const list = $('#history-list');
+    try {
+      historyDrafts = await SF.Files.listDrafts(current().id);
+    } catch (e) {
+      historyDrafts = [];
+      list.innerHTML = '<li class="h-empty">Version history needs browser storage, which is blocked in this window (private browsing?).</li>';
+      return;
+    }
+    list.innerHTML = historyDrafts.length
+      ? historyDrafts
+          .map(
+            (d, i) =>
+              `<li data-i="${i}"><span class="h-meta"><strong>${esc(whenLabel(d.at))}${i === 0 ? ' · latest' : ''}</strong><small>${d.words.toLocaleString()} words${d.name && d.name !== current().name ? ' · “' + esc(d.name) + '”' : ''}</small></span><button type="button" class="btn btn-ghost" data-h="download">Download</button><button type="button" class="btn btn-ghost" data-h="restore">Restore</button></li>`
+          )
+          .join('')
+      : '<li class="h-empty">No drafts yet — one is kept every minute while you write.</li>';
+  }
+
+  async function openHistory() {
+    closeExportMenu();
+    const s = current();
+    s.content = content();
+    await addDraftIfChanged(s).catch(() => null);
+    await renderHistory();
+    $('#history-dialog').showModal();
+  }
+
+  async function onHistoryClick(e) {
+    const b = e.target.closest('[data-h]');
+    if (!b) return;
+    const d = historyDrafts[+b.closest('li').dataset.i];
+    if (!d) return;
+    const s = current();
+    if (b.dataset.h === 'download') {
+      download(`${slug(s.name)} ${new Date(d.at).toISOString().slice(0, 16).replace(/[T:]/g, '-')}.fountain`, d.content, 'text/plain;charset=utf-8');
+      return;
+    }
+    const before = content();
+    s.content = before;
+    await addDraftIfChanged(s).catch(() => null); // the current text stays in the history too
+    $('#history-dialog').close();
+    setContent(d.content);
+    toast(`Restored the draft from ${whenLabel(d.at)}`, { label: 'Undo', run: () => current() === s && setContent(before) }, 10000);
   }
 
   // ---------------------------------------------------------------------------
@@ -1404,7 +1655,11 @@
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 's') {
       e.preventDefault();
-      if (persist()) toast('Saved');
+      if (e.shiftKey) saveAs();
+      else saveNow();
+    } else if (mod && e.key.toLowerCase() === 'o' && !e.shiftKey) {
+      e.preventDefault();
+      openFromComputer();
     } else if (mod && e.key.toLowerCase() === 'p' && !e.shiftKey) {
       e.preventDefault();
       exportAs('pdf');
@@ -1567,11 +1822,36 @@
     $('#export-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       const m = $('#export-menu');
-      m.hidden = !m.hidden;
+      const open = m.hidden;
+      closeExportMenu();
+      m.hidden = !open;
       $('#export-btn').setAttribute('aria-expanded', String(!m.hidden));
       if (!m.hidden) m.querySelector('button').focus();
     });
     $$('#export-menu [data-export]').forEach((b) => b.addEventListener('click', () => exportAs(b.dataset.export)));
+    $('#save-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const m = $('#save-menu');
+      const open = m.hidden;
+      closeExportMenu();
+      m.hidden = !open;
+      $('#save-btn').setAttribute('aria-expanded', String(open));
+      if (open) {
+        updateFileUi();
+        m.querySelector('button').focus();
+      }
+    });
+    const SAVE_ACTIONS = { save: saveNow, saveas: saveAs, open: openFromComputer, history: openHistory, unlink: unlinkFile };
+    $$('#save-menu [data-save]').forEach((b) => b.addEventListener('click', () => SAVE_ACTIONS[b.dataset.save]()));
+    $('#file-chip').addEventListener('click', onFileChip);
+    $('#history-list').addEventListener('click', onHistoryClick);
+    $('#history-now').addEventListener('click', async () => {
+      const s = current();
+      s.content = content();
+      const added = await addDraftIfChanged(s).catch(() => false);
+      await renderHistory();
+      toast(added ? 'Draft saved' : 'No changes since the latest draft');
+    });
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.menu-wrap')) closeExportMenu();
     });
@@ -1701,8 +1981,16 @@
       }
     });
 
-    window.addEventListener('beforeunload', () => {
+    window.addEventListener('beforeunload', (e) => {
       if (saveTimer) persist();
+      const s = current();
+      if (s && isScript()) s.content = content();
+      // A linked file with changes not yet written: ask before leaving
+      if (state.scripts.some((x) => fileDirty(x))) {
+        autosave();
+        e.preventDefault();
+        e.returnValue = '';
+      }
     });
     if (window.matchMedia) matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyTheme);
     setInterval(renderList, 60000);
@@ -1759,7 +2047,9 @@
     checkForUpdate();
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') checkForUpdate();
+      else autosave(); // switching away / closing the laptop: save the draft and the file now
     });
+    setInterval(autosave, AUTOSAVE_MS);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

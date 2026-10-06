@@ -547,3 +547,26 @@ kbd { font: 12px var(--sans); padding: 1px 6px; border-radius: 5px; border: 1px 
 .dd-item { display: block; width: 100%; text-align: left; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 13px; white-space: nowrap; }
 .dd-item:hover { background: var(--bg-hover); }
 .tool.active-state { color: var(--accent-2); border-color: var(--accent); background: var(--accent-soft); }
+
+/* ---------- Save to computer / version history ---------- */
+.save-menu { width: 320px; }
+.menu button strong kbd { margin-left: 6px; font-weight: 500; color: var(--text-faint); }
+.menu-note { margin: 4px 10px 6px; font-size: 12px; color: var(--text-faint); line-height: 1.45; }
+.menu-note:empty { display: none; }
+.file-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 220px; height: 28px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-dim); font-size: 12px;
+}
+.file-chip .i { width: 14px; height: 14px; flex: none; }
+.file-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-chip:hover { background: var(--bg-hover); color: var(--text); }
+.file-chip.warn { border-color: var(--danger); color: var(--danger); }
+.history-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.history-list li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.history-list .h-meta { flex: 1; min-width: 0; }
+.history-list .h-meta strong { display: block; font-size: 13.5px; }
+.history-list .h-meta small { color: var(--text-faint); font-size: 12px; }
+.history-list .btn { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.history-list .h-empty { color: var(--text-faint); border-style: dashed; }
+@media (max-width: 900px) { .file-chip { display: none; } }
+@media (max-width: 640px) { #save-btn span { display: none; } }

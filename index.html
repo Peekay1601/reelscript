@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261006-10">
+  <link rel="stylesheet" href="styles.css?v=20261006-11">
   <style id="print-page-size">@page { size: 8.5in 11in; margin: 0; }</style>
 </head>
 <body>
@@ -40,7 +40,7 @@
       <div class="sidebar-footer">
         <button class="sidebar-link" id="open-guide"><svg class="i"><use href="#i-book"/></svg>Formatting guide</button>
         <button class="sidebar-link" id="theme-toggle"><svg class="i"><use href="#i-moon"/></svg><span>Toggle theme</span></button>
-        <p class="sidebar-note">Scripts are saved privately in this browser. <span id="app-version"></span></p>
+        <p class="sidebar-note">Scripts are saved privately in this browser, with a draft every minute. Use Save to keep a file on your computer. <span id="app-version"></span></p>
       </div>
     </aside>
     <div class="scrim" id="scrim"></div>
@@ -51,6 +51,7 @@
         <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open scripts"><svg class="i"><use href="#i-menu"/></svg></button>
         <input class="doc-title" id="doc-title" aria-label="Script name" placeholder="Untitled script" maxlength="120">
         <span class="save-state" id="save-state" aria-live="polite"></span>
+        <button class="file-chip" id="file-chip" hidden title="This script is saved to a file on your computer"><svg class="i"><use href="#i-disk"/></svg><span id="file-chip-name"></span></button>
 
         <div class="topbar-spacer"></div>
 
@@ -67,6 +68,19 @@
 
         <button class="icon-btn" id="outline-toggle" aria-label="Toggle outline" title="Outline"><svg class="i"><use href="#i-list"/></svg></button>
         <button class="icon-btn" id="settings-btn" aria-label="Page settings" title="Page settings"><svg class="i"><use href="#i-settings"/></svg></button>
+
+        <div class="menu-wrap">
+          <button class="btn btn-ghost" id="save-btn" aria-haspopup="menu" aria-expanded="false" title="Save to your computer (Ctrl+S)"><svg class="i"><use href="#i-disk"/></svg><span>Save</span></button>
+          <div class="menu save-menu" id="save-menu" role="menu" hidden>
+            <button role="menuitem" data-save="save"><svg class="i"><use href="#i-disk"/></svg><span><strong>Save <kbd>Ctrl+S</kbd></strong><small id="save-item-hint">Choose a folder the first time, then save there</small></span></button>
+            <button role="menuitem" data-save="saveas"><svg class="i"><use href="#i-folder"/></svg><span><strong>Save as… <kbd>Ctrl+Shift+S</kbd></strong><small>Pick the folder, file name and format</small></span></button>
+            <button role="menuitem" data-save="open"><svg class="i"><use href="#i-upload"/></svg><span><strong>Open from computer… <kbd>Ctrl+O</kbd></strong><small>Edit a file and keep saving back to it</small></span></button>
+            <div class="menu-section">Auto-save</div>
+            <button role="menuitem" data-save="history"><svg class="i"><use href="#i-clock"/></svg><span><strong>Version history</strong><small>A draft is kept every minute while you write</small></span></button>
+            <button role="menuitem" data-save="unlink" id="save-unlink" hidden><svg class="i"><use href="#i-x"/></svg><span><strong>Stop saving to this file</strong><small id="save-unlink-hint"></small></span></button>
+            <p class="menu-note" id="save-note"></p>
+          </div>
+        </div>
 
         <div class="menu-wrap">
           <button class="btn btn-primary" id="export-btn" aria-haspopup="menu" aria-expanded="false"><svg class="i"><use href="#i-download"/></svg><span>Export</span></button>
@@ -298,6 +312,17 @@
     </form>
   </dialog>
 
+  <dialog class="modal" id="history-dialog">
+    <form method="dialog" class="modal-card">
+      <header class="modal-head"><h2>Version history</h2></header>
+      <div class="modal-body">
+        <p class="muted" id="history-intro">While you write, ReelScript keeps a draft of this script every minute (the latest 100). Drafts stay private in this browser.</p>
+        <ul class="history-list" id="history-list"></ul>
+      </div>
+      <footer class="modal-foot"><button class="btn btn-ghost" type="button" id="history-now">Save a draft now</button><button class="btn btn-primary" value="close">Close</button></footer>
+    </form>
+  </dialog>
+
   <dialog class="modal" id="confirm-dialog">
     <form method="dialog" class="modal-card narrow">
       <header class="modal-head"><h2 id="confirm-title">Are you sure?</h2></header>
@@ -357,7 +382,15 @@
           <li><kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> bold, italic, underline · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> strikethrough</li>
           <li><kbd>Ctrl</kbd>+<kbd>L</kbd> / <kbd>E</kbd> / <kbd>R</kbd> / <kbd>J</kbd> align left, center, right, justify (also with <kbd>Shift</kbd>)</li>
           <li><kbd>Shift</kbd>+<kbd>F3</kbd> change case · <kbd>Ctrl</kbd>+<kbd>Space</kbd> clear formatting</li>
-          <li><kbd>Ctrl</kbd>+<kbd>S</kbd> save now · <kbd>Ctrl</kbd>+<kbd>P</kbd> download PDF</li>
+          <li><kbd>Ctrl</kbd>+<kbd>S</kbd> save to your computer · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> save as · <kbd>Ctrl</kbd>+<kbd>O</kbd> open a file · <kbd>Ctrl</kbd>+<kbd>P</kbd> download PDF</li>
+        </ul>
+        <h3>Saving and auto-save</h3>
+        <ul class="kbd-list">
+          <li>Every change is saved in this browser straight away. Every minute a <strong>draft</strong> is also kept (the latest 100 per script). Open <em>Save → Version history</em> to restore or download one.</li>
+          <li><strong>Save as…</strong> opens your computer's save dialog, where you choose the folder, file name and format (Fountain keeps everything; Final Draft, Highland 2, Fade In, Trelby and Celtx are also available). After that, <strong>Save</strong> and the every-minute auto-save write straight into that file. The file name shows next to the title.</li>
+          <li><strong>Open from computer…</strong> opens a .fountain or .txt file and keeps saving back to it. Other formats open as a copy, so the original file is never overwritten.</li>
+          <li>After a browser restart, the browser may ask again before ReelScript can write to the file. Click the red file name to reconnect.</li>
+          <li>Saving into a folder works in Chrome, Edge, Brave and Opera on a computer. Safari, Firefox and phones download the file instead; drafts and version history work everywhere.</li>
         </ul>
         <h3>Formatting styles</h3>
         <p class="muted">Pick <strong>Style</strong> at the top or in Page settings. A style sets the font, the spacing before scene headings, underlining and paper size, matching each app's default output. <strong>Bold scene headings</strong> and <strong>bold names</strong> are your own choice: use the Bold buttons in the toolbar, and no style will change them. Every app below makes bold optional.</p>
@@ -394,6 +427,9 @@
   <!-- ============ Icons ============ -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
+      <symbol id="i-disk" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
@@ -426,16 +462,17 @@
     </defs>
   </svg>
 
-  <script src="vendor/jspdf.umd.min.js?v=20261006-10" defer></script>
-  <script src="js/parser.js?v=20261006-10" defer></script>
-  <script src="js/layout.js?v=20261006-10" defer></script>
-  <script src="js/export.js?v=20261006-10" defer></script>
-  <script src="js/markdown.js?v=20261006-10" defer></script>
-  <script src="js/docx.js?v=20261006-10" defer></script>
-  <script src="js/importers.js?v=20261006-10" defer></script>
-  <script src="js/formats.js?v=20261006-10" defer></script>
-  <script src="js/editor.js?v=20261006-10" defer></script>
-  <script src="js/sample.js?v=20261006-10" defer></script>
-  <script src="js/app.js?v=20261006-10" defer></script>
+  <script src="vendor/jspdf.umd.min.js?v=20261006-11" defer></script>
+  <script src="js/parser.js?v=20261006-11" defer></script>
+  <script src="js/layout.js?v=20261006-11" defer></script>
+  <script src="js/export.js?v=20261006-11" defer></script>
+  <script src="js/markdown.js?v=20261006-11" defer></script>
+  <script src="js/docx.js?v=20261006-11" defer></script>
+  <script src="js/importers.js?v=20261006-11" defer></script>
+  <script src="js/formats.js?v=20261006-11" defer></script>
+  <script src="js/files.js?v=20261006-11" defer></script>
+  <script src="js/editor.js?v=20261006-11" defer></script>
+  <script src="js/sample.js?v=20261006-11" defer></script>
+  <script src="js/app.js?v=20261006-11" defer></script>
 </body>
 </html>

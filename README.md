@@ -4,6 +4,12 @@ A browser-based screenplay editor and formatter with a live page preview and one
 
 ## Features
 
+- **Saving and auto-save**:
+  - Every change is stored in the browser immediately.
+  - Every minute a draft of each changed script goes to IndexedDB (the latest 100 per script). **Save → Version history** restores or downloads any of them.
+  - **Save as… (Ctrl+Shift+S)** opens the system save dialog, so you choose the folder, file name and format (Fountain, Final Draft, Highland 2, Fade In, Trelby, Celtx). From then on, **Save (Ctrl+S)** and the every-minute auto-save write straight into that file.
+  - **Open from computer… (Ctrl+O)** links a `.fountain` / `.txt` file and saves back to it. Other formats open as a copy.
+  - This uses the File System Access API (Chrome, Edge, Brave, Opera on desktop). Other browsers download the file instead.
 - **Word-style text formatting** in the toolbar:
   - bold, italic, underline, strikethrough;
   - font color and highlight palettes;
@@ -73,6 +79,7 @@ A browser-based screenplay editor and formatter with a live page preview and one
 | `js/importers.js` | Highland 2, Celtx, PDF (pdf.js) and other importers; tiny ZIP reader |
 | `js/markdown.js` | ChatGPT / Markdown → Fountain converter |
 | `js/docx.js` | Word .docx writer (includes a tiny ZIP writer) |
+| `js/files.js` | Save to a chosen file (File System Access API) and per-minute drafts (IndexedDB) |
 | `js/editor.js` | Final Draft–style page editor (element model ⇄ Fountain) |
 | `js/app.js` | Editor, storage, preview, dialogs |
 | `vendor/jspdf.umd.min.js` | jsPDF 4.2.1 (MIT), vendored so the PDF export works offline |
@@ -82,5 +89,5 @@ A browser-based screenplay editor and formatter with a live page preview and one
 
 ## Notes
 
-- Scripts live only in the browser where they were written. Export `.fountain` or `.fdx` to back them up or move them between devices.
+- Scripts live only in the browser where they were written, unless you Save them to a file. Save a `.fountain` file (or export `.fdx`) to back them up or move them between devices.
 - The editor and preview use the Courier Prime web font when it's online, with Courier New as the fallback. Both have the same character width, so pagination doesn't change.

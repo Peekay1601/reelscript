@@ -5,7 +5,7 @@
 'use strict';
 const path = require('path');
 const assert = require('assert');
-['parser', 'layout', 'export', 'docx', 'markdown', 'editor', 'importers', 'formats', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
+['parser', 'layout', 'export', 'docx', 'markdown', 'editor', 'importers', 'formats', 'files', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
 const SF = globalThis.SF;
 
 let passed = 0;
@@ -24,6 +24,26 @@ function test(name, fn) {
 const types = (src) => SF.parse(src).tokens.map((t) => t.type);
 const lineText = (it) => it.segs.map((s) => s.runs.map((r) => r.text).join('')).join(' | ');
 const body = (m, page) => m.pages[page].items.filter((i) => i.kind !== 'header');
+
+// ---------------------------------------------------------------- files (save to computer)
+test('save serializes by the chosen file extension', async () => {
+  const sc = { id: 'x', name: 'Test', content: 'INT. HOUSE - DAY\n\nJOHN\nHi.\n', settings: SF.LAYOUT_DEFAULTS };
+  assert.strictEqual(SF.Files.serialize(sc, 'a.fountain'), sc.content);
+  assert.ok(/<FinalDraft/.test(SF.Files.serialize(sc, 'My Script.FDX')));
+  assert.ok(/\[Scene Heading\]|INT\. HOUSE/.test(String(SF.Files.serialize(sc, 'x.trelby'))));
+  for (const ext of ['highland', 'fadein', 'celtx']) {
+    const z = SF.Files.serialize(sc, 'x.' + ext);
+    assert.ok(z instanceof Uint8Array && z[0] === 0x50 && z[1] === 0x4b, ext + ' is a zip');
+    const files = await SF.unzip(z);
+    const all = [...files.values()].map((f) => new TextDecoder().decode(f)).join('\n');
+    assert.ok(/JOHN/.test(all), ext + ' contains the script');
+  }
+  assert.strictEqual(SF.Files.extOf('a.b.FadeIn'), 'fadein');
+  assert.strictEqual(SF.Files.extOf('noext'), 'fountain');
+  assert.ok(SF.Files.canWriteBack('draft.fountain') && SF.Files.canWriteBack('x.txt'));
+  assert.ok(!SF.Files.canWriteBack('x.fdx') && !SF.Files.canWriteBack('x.pdf') && !SF.Files.canWriteBack('x.md'));
+  assert.strictEqual(SF.Files.canPickFiles(), false);
+});
 
 // ---------------------------------------------------------------- parser
 test('recognises the core elements', () => {
