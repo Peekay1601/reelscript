@@ -179,7 +179,7 @@ test('title page read / write', () => {
 // ---------------------------------------------------------------- exporters
 test('FDX export contains typed paragraphs and escapes XML', () => {
   const x = SF.toFDX('INT. A & B - DAY\n\nBOB\n(beat)\n<Hi> **there**\n');
-  assert.ok(x.includes('<Paragraph Type="Scene Heading"><Text>INT. A &amp; B - DAY</Text>'));
+  assert.ok(x.includes('<Paragraph Type="Scene Heading"><Text Style="Bold">INT. A &amp; B - DAY</Text>'));
   assert.ok(x.includes('<Paragraph Type="Parenthetical">'));
   assert.ok(x.includes('<Text>&lt;Hi&gt; </Text><Text Style="Bold">there</Text>'));
 });
@@ -387,6 +387,16 @@ test('notes on their own line become note elements in Script view and round-trip
   const back = SF.editorToFountain('', els).text;
   assert.ok(back.includes('[[Dramatic movement: x]]'));
   assert.ok(!SF.layout(back).pages[0].items.some((i) => /Dramatic/.test(lineText(i))));
+});
+
+test('scene headings are bold by default, like modern Final Draft scripts', () => {
+  const src = 'EXT. VENNELA’S RIVERSIDE TERRACE – DAY\n\nShe dances.\n';
+  const h = body(SF.layout(src), 0)[0];
+  assert.strictEqual(lineText(h), 'EXT. VENNELA’S RIVERSIDE TERRACE – DAY');
+  assert.ok(h.segs[0].runs.every((r) => r.b));
+  assert.ok(body(SF.layout(src, { boldSceneHeadings: false }), 0)[0].segs[0].runs.every((r) => !r.b));
+  assert.ok(SF.toFDX(src).includes('<Paragraph Type="Scene Heading"><Text Style="Bold">'));
+  assert.ok(/styleId="SceneHeading">[\s\S]{0,300}<w:b\/>/.test(Buffer.from(SF.buildDOCX(src, {})).toString('utf8')));
 });
 
 // ---------------------------------------------------------------- docx

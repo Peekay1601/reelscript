@@ -39,7 +39,7 @@
   const DEFAULTS = {
     pageSize: 'letter',
     sceneNumbers: 'none', // none | left | right | both
-    boldSceneHeadings: false,
+    boldSceneHeadings: true,
     boldCharacterNames: true,
     underlineSceneHeadings: false,
     doubleSpaceSceneHeadings: true,

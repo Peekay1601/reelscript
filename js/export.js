@@ -157,7 +157,7 @@
           out.push(para('New Act', t.text.toUpperCase()));
           break;
         case 'scene_heading':
-          out.push(para('Scene Heading', t.text.toUpperCase(), t.number ? ` Number="${xmlEscape(t.number)}"` : ''));
+          out.push(para('Scene Heading', t.text.toUpperCase(), t.number ? ` Number="${xmlEscape(t.number)}"` : '', opts.boldSceneHeadings ? { b: true } : null));
           break;
         case 'action':
           t.lines.forEach((l) => out.push(para('Action', l.text)));

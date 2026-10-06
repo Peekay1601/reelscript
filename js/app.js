@@ -9,7 +9,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const STORE_KEY = 'reelscript.v1';
-  const APP_VERSION = '20261006-5'; // keep in sync with version.json and the ?v= tags in index.html
+  const APP_VERSION = '20261006-6'; // keep in sync with version.json and the ?v= tags in index.html
   const ELEMENT_LABELS = {
     episode: 'Episode',
     scene_heading: 'Scene heading',
@@ -76,7 +76,7 @@
   const now = () => Date.now();
 
   function newScript(name, content) {
-    return { id: uid(), name: name || 'Untitled script', content: content || '', settings: { ...SF.LAYOUT_DEFAULTS }, createdAt: now(), updatedAt: now() };
+    return { id: uid(), name: name || 'Untitled script', content: content || '', settings: { ...SF.LAYOUT_DEFAULTS, settingsVersion: 2 }, createdAt: now(), updatedAt: now() };
   }
 
   function load() {
@@ -91,7 +91,17 @@
     } catch (e) {
       /* private mode / corrupted storage: start fresh */
     }
-    state.scripts.forEach((s) => (s.settings = { ...SF.LAYOUT_DEFAULTS, ...(s.settings || {}) }));
+    state.scripts.forEach((s) => {
+      const old = s.settings || {};
+      s.settings = { ...SF.LAYOUT_DEFAULTS, ...old };
+      // v2: bold scene headings + bold speaker names by default. Scripts created while the
+      // default was briefly "not bold" get bold back (the user never chose otherwise).
+      if (!old.settingsVersion || old.settingsVersion < 2) {
+        s.settings.boldSceneHeadings = true;
+        s.settings.boldCharacterNames = true;
+        s.settings.settingsVersion = 2;
+      }
+    });
     if (!state.scripts.length) state.scripts.push(newScript('The Last Chai (sample)', SF.SAMPLE));
     if (!state.scripts.some((s) => s.id === state.currentId)) state.currentId = state.scripts[0].id;
   }
