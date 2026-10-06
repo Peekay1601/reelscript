@@ -479,3 +479,6 @@ kbd { font: 12px var(--sans); padding: 1px 6px; border-radius: 5px; border: 1px 
 @media (max-width: 1600px) {
   .tool[data-el='centered'], .tool[data-el='page_break'] { display: none; }
 }
+
+.check-inline { display: flex; gap: 10px; align-items: flex-start; margin-top: 12px; font-size: 13px; color: var(--text-dim); }
+.check-inline input { margin-top: 2px; flex: none; }

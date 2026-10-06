@@ -13,6 +13,9 @@ A browser-based screenplay editor and formatter with a live page preview and one
 - **Episodes** (Final Draft's "New Act"):
   - Written as `EPISODE 1`, `Episode 2: Title`, `EP 04 - LOST`, `ఎపిసోడ్ 3`, `एपिसोड 5`, `ACT ONE`, or anything after `#!`.
   - They print centered, bold and underlined, start a new page, restart scene numbers and appear in the outline.
+- **Paste from ChatGPT** or other AI chats: Markdown such as `## EPISODE 01 — "TITLE"`, `### EXT. PLACE – NIGHT`, `**KARTHIK**`, `**KARTHIK — O.S.**` and `**CUT TO BLACK.**` is converted into a proper script.
+  - The title page is built from the `#` title, "Written by", Format and Genre.
+  - ChatGPT's commentary (intro, "Dramatic movement", "Emotional high", closing notes) is left out, or kept as hidden notes if you choose.
 - **Word export (.docx)** with real screenplay paragraph styles, so the script stays editable in Word, Google Docs or Pages. Indian scripts keep their own fonts.
 
 - **Write in plain text ([Fountain](https://fountain.io/syntax))**: scene headings, action, characters, parentheticals, dialogue, dual dialogue, transitions, centered text, lyrics, page breaks, notes, boneyard, sections and *italic* / **bold** / _underline_.
@@ -50,6 +53,7 @@ A browser-based screenplay editor and formatter with a live page preview and one
 | `js/parser.js` | Fountain parser, inline emphasis, smart clean-up, title-page helpers |
 | `js/layout.js` | Geometry and pagination → page model (inches) |
 | `js/export.js` | PDF (jsPDF), Final Draft export/import |
+| `js/markdown.js` | ChatGPT / Markdown → Fountain converter |
 | `js/docx.js` | Word .docx writer (includes a tiny ZIP writer) |
 | `js/editor.js` | Final Draft–style page editor (element model ⇄ Fountain) |
 | `js/app.js` | Editor, storage, preview, dialogs |

@@ -789,7 +789,10 @@
       // Multi-line paste: treat as a script fragment
       const el = this.currentEl() || this.elements()[this.elements().length - 1];
       const tailHtml = el && el.dataset.t !== 'page_break' ? this._splitAtCaret(el) : '';
-      const { els } = fromFountain(SF.cleanup(text));
+      const conv = SF.convertPasted ? SF.convertPasted(text) : { text: SF.cleanup(text) };
+      const { els, titleBlock } = fromFountain(conv.text);
+      if (titleBlock && !this.titleBlock) this.titleBlock = titleBlock;
+      if (conv.info && this.opts.onInfo) setTimeout(() => this.opts.onInfo(conv.info), 0);
       let anchor = el;
       if (el && !el.textContent) {
         anchor = el.previousElementSibling;

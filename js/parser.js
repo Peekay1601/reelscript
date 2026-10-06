@@ -154,7 +154,17 @@
         const depth = /^#+/.exec(line)[0].length;
         const text = line.slice(depth).trim();
         if (isEpisode(text)) tokens.push({ type: 'episode', text, line: i });
-        else tokens.push({ type: 'section', depth, text, line: i });
+        else if (isSceneHeading(text) && isAllCaps(text)) {
+          // Markdown-style "### EXT. PLACE - NIGHT" (e.g. pasted from ChatGPT)
+          let t = text;
+          let number = null;
+          const nm = SCENE_NUM_RE.exec(t);
+          if (nm) {
+            number = nm[1].trim();
+            t = t.slice(0, nm.index).trim();
+          }
+          tokens.push({ type: 'scene_heading', text: t, number, line: i });
+        } else tokens.push({ type: 'section', depth, text, line: i });
         continue;
       }
       if (prevBlank && isEpisode(line) && !isSceneHeading(line)) {
@@ -343,6 +353,7 @@
     ['draft date', 'Draft date'],
     ['contact', 'Contact'],
     ['copyright', 'Copyright'],
+    ['notes', 'Notes'],
   ];
 
   function getTitleFields(src) {
@@ -377,6 +388,7 @@
   // Smart clean-up: turns loosely formatted / pasted scripts into clean Fountain
   // ---------------------------------------------------------------------------
   function cleanup(src) {
+    if (SF.looksMarkdown && SF.looksMarkdown(src)) return SF.fromMarkdown(src).text;
     const input = normalize(src).split('\n');
     const { lineCount } = parseTitlePage(input);
     const head = input.slice(0, lineCount);

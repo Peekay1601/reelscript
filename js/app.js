@@ -756,7 +756,7 @@
     const chat = lines.filter((l) => /^[A-Z][A-Z .'-]{1,24}:\s+\S/.test(l)).length;
     const artefacts = /\(MORE\)|CONTINUED:|\(CONT['’]D\)/.test(text);
     const tight = /\S\n(INT|EXT)[. ]/.test(text);
-    return indented >= 3 || chat >= 2 || artefacts || tight;
+    return indented >= 3 || chat >= 2 || artefacts || tight || SF.looksMarkdown(text);
   }
 
   function importFile(file) {
@@ -774,6 +774,12 @@
         if (/\.fdx$/i.test(file.name) || /<FinalDraft[\s>]/.test(text.slice(0, 2000))) text = SF.fromFDX(text);
       } catch (e) {
         toast(e.message || 'Could not read that Final Draft file.');
+        return;
+      }
+      if (SF.looksMarkdown(text)) {
+        const conv = SF.convertPasted(text);
+        createScript(name, conv.text);
+        toast(conv.info, null, 6000);
         return;
       }
       createScript(name, SF.normalize(text));
@@ -841,6 +847,19 @@
     }
   }
 
+  /** Give an untitled script the title from its title page. */
+  function autoName() {
+    const s = current();
+    if (!/^untitled/i.test(s.name || 'untitled')) return;
+    const t = SF.plainText(SF.getTitleFields(content()).title || '').split('\n')[0].trim();
+    if (!t) return;
+    s.name = t.length > 60 ? t.slice(0, 60) + '…' : t;
+    $('#doc-title').value = s.name;
+    document.title = `${s.name} — ReelScript`;
+    renderList();
+    schedulePersist();
+  }
+
   function runCleanup() {
     const before = content();
     const after = SF.cleanup(before);
@@ -849,7 +868,8 @@
       return;
     }
     setContent(after);
-    toast('Formatting cleaned up', {
+    autoName();
+    toast(SF.looksMarkdown(before) ? 'Converted from ChatGPT formatting' : 'Formatting cleaned up', {
       label: 'Undo',
       run: () => {
         if (isScript()) se.undo();
@@ -905,7 +925,7 @@
   function saveTitle() {
     const f = $('#title-form');
     const vals = {};
-    ['title', 'credit', 'authors', 'source', 'draft date', 'contact', 'copyright'].forEach((k) => (vals[k] = f.elements[k].value));
+    ['title', 'credit', 'authors', 'source', 'draft date', 'contact', 'copyright', 'notes'].forEach((k) => (vals[k] = f.elements[k].value));
     welcomeDismissed = true;
     if (isScript()) {
       se.checkpoint();
@@ -1096,7 +1116,8 @@
     ta.addEventListener('paste', (e) => {
       const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
       if (text.length > 200 && looksMessy(text)) {
-        setTimeout(() => toast('Pasted text looks like it needs tidying.', { label: 'Smart clean-up', run: runCleanup }), 50);
+        const msg = SF.looksMarkdown(text) ? 'That looks like ChatGPT formatting (#, **).' : 'Pasted text looks like it needs tidying.';
+        setTimeout(() => toast(msg, { label: SF.looksMarkdown(text) ? 'Convert to script' : 'Smart clean-up', run: runCleanup }), 50);
       }
     });
 
@@ -1192,8 +1213,11 @@
       $('#paste-input').value = '';
       if (!text.trim()) return;
       welcomeDismissed = true;
-      setContent(SF.cleanup(text));
-      toast('Cleaned up — check the preview →');
+      const conv = SF.convertPasted(text, { keepNotes: $('#paste-keep-notes').checked });
+      if (/\[\[/.test(conv.text) && isScript()) setMode('text', true); // notes live in Fountain view
+      setContent(conv.text);
+      autoName();
+      toast(conv.info || 'Cleaned up — check the preview →', null, 6000);
     });
 
     $('#theme-toggle').addEventListener('click', () => {
@@ -1319,6 +1343,10 @@
     se = new SF.ScriptEditor($('#script-host'), {
       onChange: onScriptChange,
       onCaret: afterCaretMove,
+      onInfo: (msg) => {
+        toast(msg, null, 6000);
+        autoName();
+      },
     });
     bind();
     applyMode();

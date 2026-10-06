@@ -5,7 +5,7 @@
 'use strict';
 const path = require('path');
 const assert = require('assert');
-['parser', 'layout', 'export', 'docx', 'editor', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
+['parser', 'layout', 'export', 'docx', 'markdown', 'editor', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
 const SF = globalThis.SF;
 
 let passed = 0;
@@ -251,6 +251,82 @@ test('script editor: speech without a cue is kept as action, all-caps action is 
   ]);
   assert.deepStrictEqual(types(text), ['action', 'action', 'dialogue']);
   assert.ok(text.includes('BOB\nHi.'));
+});
+
+// ---------------------------------------------------------------- ChatGPT / Markdown
+const CHATGPT = [
+  '# YOUR TURN, THEN MINE',
+  '### 30-episode microdrama adaptation',
+  '**Written by KODATI PAVAN KALYAN**  ',
+  '**Format:** 30 episodes × approximately 2 minutes  ',
+  '**Genre:** Romantic drama',
+  '',
+  'Your story’s strongest hook is already there: **two people** who love each other. [1]',
+  '',
+  '---',
+  '',
+  '## EPISODE 01 — “NOT WITHOUT YOU”',
+  '**Dramatic movement:** A failed performance becomes the beginning of a shared dream.  ',
+  '**Emotional high:** She refuses applause that excludes him.',
+  '',
+  '### EXT. NEIGHBOURHOOD STAGE, RAJAHMUNDRY – NIGHT',
+  '',
+  'A dance track CUTS OUT.',
+  '',
+  '**KARTHIK**  ',
+  'I can play. Keep dancing.',
+  '',
+  '**KARTHIK — O.S.**  ',
+  '(softly)  ',
+  'Again.',
+  '',
+  '### MOMENTS LATER',
+  '',
+  '**SUPER: FIFTEEN YEARS LATER.**',
+  '',
+  '*This is a performance-led episode. Its runtime should come from actual dance and music.*',
+  '',
+  '**END IMAGE:** Two children eating.',
+  '',
+  '**CUT TO BLACK.**',
+  '',
+  '---',
+  '',
+  '## What this episodic version protects',
+  '',
+  '- **Karthik remains loving and flawed.**',
+].join('\n');
+
+test('ChatGPT markdown is detected (and plain Fountain is not)', () => {
+  assert.ok(SF.looksMarkdown(CHATGPT));
+  assert.ok(!SF.looksMarkdown(SF.SAMPLE));
+  assert.ok(!SF.looksMarkdown('INT. A - DAY\n\nBOB\nHi.\n'));
+});
+
+test('ChatGPT markdown → title page, episodes, scenes, cues, transitions; commentary removed', () => {
+  const r = SF.convertPasted(CHATGPT);
+  const p = SF.parse(r.text);
+  assert.deepStrictEqual(p.title.title, ['YOUR TURN, THEN MINE']);
+  assert.deepStrictEqual(p.title.authors, ['KODATI PAVAN KALYAN']);
+  assert.ok(p.title.notes.join(' ').includes('Genre: Romantic drama'));
+  assert.deepStrictEqual(p.tokens.map((t) => t.type), ['episode', 'scene_heading', 'action', 'dialogue', 'dialogue', 'scene_heading', 'action', 'action', 'transition']);
+  assert.strictEqual(p.tokens[0].text, 'EPISODE 01 — “NOT WITHOUT YOU”');
+  assert.strictEqual(p.tokens[3].character, 'KARTHIK');
+  assert.strictEqual(p.tokens[4].character, 'KARTHIK (O.S.)');
+  assert.deepStrictEqual(p.tokens[4].parts.map((x) => x.type), ['parenthetical', 'dialogue']);
+  assert.ok(!/Dramatic movement|Emotional high|strongest hook|protects|performance-led|\[1\]|---|\*\*KARTHIK/.test(r.text), r.text);
+  assert.ok(r.notes >= 5);
+});
+
+test('ChatGPT commentary can be kept as hidden notes', () => {
+  const r = SF.convertPasted(CHATGPT, { keepNotes: true });
+  assert.ok(r.text.includes('[[**Dramatic movement:**'));
+  const printed = SF.layout(r.text).pages.map((pg) => pg.items.map(lineText).join('\n')).join('\n');
+  assert.ok(!/Dramatic movement/.test(printed));
+});
+
+test('### scene headings typed directly in Fountain still print', () => {
+  assert.deepStrictEqual(types('### EXT. ROOF - NIGHT\n\nWind.'), ['scene_heading', 'action']);
 });
 
 // ---------------------------------------------------------------- docx

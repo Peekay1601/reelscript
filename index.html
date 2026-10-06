@@ -134,7 +134,7 @@
                 <div class="cards">
                   <button class="card" data-welcome="write"><svg class="i"><use href="#i-pen"/></svg><strong>Start writing</strong><span>Blank page, Fountain syntax</span></button>
                   <button class="card" data-welcome="sample"><svg class="i"><use href="#i-film"/></svg><strong>Open a sample</strong><span>See every element in action</span></button>
-                  <button class="card" data-welcome="paste"><svg class="i"><use href="#i-sparkles"/></svg><strong>Paste a messy script</strong><span>We'll clean up the formatting</span></button>
+                  <button class="card" data-welcome="paste"><svg class="i"><use href="#i-sparkles"/></svg><strong>Paste from ChatGPT</strong><span>Or any messy script: we'll format it</span></button>
                   <button class="card" data-welcome="import"><svg class="i"><use href="#i-upload"/></svg><strong>Import a file</strong><span>.fdx, .fountain or .txt</span></button>
                 </div>
               </div>
@@ -217,6 +217,7 @@
         <label>Draft date<input name="draft date" placeholder="First draft — 6 Oct 2026"></label>
         <label>Copyright<input name="copyright" placeholder="© 2026"></label>
         <label class="span-2">Contact<textarea name="contact" rows="3" placeholder="Name&#10;Phone&#10;Email"></textarea></label>
+        <label class="span-2">Notes <small>Printed bottom-right, e.g. format or genre</small><textarea name="notes" rows="2" placeholder="Format: 30 episodes × 2 minutes&#10;Genre: Romantic drama"></textarea></label>
       </div>
       <footer class="modal-foot"><button class="btn btn-ghost" value="cancel">Cancel</button><button class="btn btn-primary" value="save">Apply</button></footer>
     </form>
@@ -226,8 +227,9 @@
     <form method="dialog" class="modal-card wide">
       <header class="modal-head"><h2>Paste & clean up</h2><button class="icon-btn" value="cancel" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></header>
       <div class="modal-body">
-        <p class="muted">Paste text copied from Word, Google Docs, a PDF or a chat. We'll detect scene headings, character cues, dialogue and transitions and remove page numbers, (MORE) and CONTINUED markers.</p>
-        <textarea id="paste-input" rows="14" class="mono" placeholder="INT. TEA STALL - NIGHT&#10;RAVI: Two cutting chai, please.&#10;…"></textarea>
+        <p class="muted">Paste a script from <strong>ChatGPT</strong> or another AI chat, Word, Google Docs or a PDF. ReelScript finds the title, episodes, scene headings, characters, dialogue and transitions. It removes Markdown symbols (#, **, ---), page numbers, (MORE) and CONTINUED markers.</p>
+        <textarea id="paste-input" rows="14" class="mono" placeholder="## EPISODE 01 — “NOT WITHOUT YOU”&#10;### EXT. NEIGHBOURHOOD STAGE – NIGHT&#10;**KARTHIK**&#10;I can play. Keep dancing.&#10;…"></textarea>
+        <label class="check-inline"><input type="checkbox" id="paste-keep-notes"> Keep ChatGPT's commentary (intro, "Dramatic movement", "Emotional high"…) as hidden notes. Notes aren't printed and open in Fountain view.</label>
       </div>
       <footer class="modal-foot"><button class="btn btn-ghost" value="cancel">Cancel</button><button class="btn btn-primary" value="ok">Clean up & open</button></footer>
     </form>
@@ -331,6 +333,7 @@
   <script src="js/parser.js" defer></script>
   <script src="js/layout.js" defer></script>
   <script src="js/export.js" defer></script>
+  <script src="js/markdown.js" defer></script>
   <script src="js/docx.js" defer></script>
   <script src="js/editor.js" defer></script>
   <script src="js/sample.js" defer></script>
