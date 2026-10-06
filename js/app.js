@@ -10,6 +10,7 @@
 
   const STORE_KEY = 'reelscript.v1';
   const ELEMENT_LABELS = {
+    episode: 'Episode',
     scene_heading: 'Scene heading',
     action: 'Action',
     character: 'Character',
@@ -26,6 +27,7 @@
   };
   const TAB_CYCLE = ['action', 'scene_heading', 'character', 'parenthetical', 'dialogue', 'transition'];
   const SHORTCUT_ELEMENTS = ['scene_heading', 'action', 'character', 'parenthetical', 'dialogue', 'transition', 'centered'];
+  const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
   // ---------------------------------------------------------------------------
   // State & storage
@@ -33,9 +35,35 @@
   const state = {
     scripts: [],
     currentId: null,
-    prefs: { theme: null, smartEnter: true, zoom: 'fit', view: 'split', outlineOpen: false, outlineTab: 'scenes' },
+    prefs: { theme: null, smartEnter: true, zoom: 'fit', view: 'split', outlineOpen: false, outlineTab: 'scenes', editorMode: 'script' },
   };
   let model = null;
+  let se = null; // Final Draft–style script editor
+  let linePage = new Map(); // fountain line → printed page
+  const isScript = () => state.prefs.editorMode === 'script';
+
+  /** Current Fountain source, whichever editor is active. */
+  function content() {
+    return isScript() ? se.sync() : ed().value;
+  }
+
+  /** Replace the whole script (undoable in both editors). */
+  function setContent(text) {
+    if (isScript()) {
+      se.checkpoint();
+      se.load(text, true);
+      onScriptChange(se.toFountain());
+    } else replaceAll(text);
+  }
+
+  function onScriptChange(text) {
+    const s = current();
+    s.content = text;
+    s.updatedAt = now();
+    updateWelcome();
+    scheduleRender();
+    schedulePersist();
+  }
   let lineTypes = [];
   let welcomeDismissed = false;
 
@@ -68,6 +96,7 @@
     clearTimeout(saveTimer);
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({ scripts: state.scripts, currentId: state.currentId, prefs: state.prefs }));
+      lastSave = now();
       setSaveState('Saved');
       return true;
     } catch (e) {
@@ -75,10 +104,13 @@
       return false;
     }
   }
+  let lastSave = 0;
   function schedulePersist() {
     setSaveState('Saving…');
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(persist, 500);
+    // Debounce, but never let continuous typing go more than 2s unsaved
+    if (now() - lastSave > 2000) saveTimer = setTimeout(persist, 0);
+    else saveTimer = setTimeout(persist, 500);
   }
   function setSaveState(text, error) {
     const el = $('#save-state');
@@ -263,6 +295,11 @@
         caretOffset = 2 + core.length;
         blankBefore = true;
         break;
+      case 'episode':
+        text = core || 'EPISODE 1';
+        if (!SF.isEpisode(text)) text = '#! ' + text;
+        blankBefore = blankAfter = true;
+        break;
       case 'page_break':
         insertBlock('===');
         return;
@@ -306,6 +343,7 @@
   }
 
   function currentType() {
+    if (isScript()) return se.currentType();
     const ta = ed();
     const v = ta.value;
     const idx = lineIndexAt(v, ta.selectionStart);
@@ -369,7 +407,21 @@
     return Math.max(0.3, Math.min(1, avail / (model.size.w * 96)));
   }
 
+  /** Scale the script page down when its pane is narrower than the paper. */
+  function fitScriptPaper() {
+    if (!se || !isScript() || !model) return;
+    const host = $('#script-host');
+    const paper = se.paper;
+    if (window.innerWidth <= 900 || !host.clientWidth) {
+      paper.style.zoom = '';
+      return;
+    }
+    const avail = host.clientWidth - 48;
+    paper.style.zoom = Math.min(1, avail / (model.size.w * 96)).toFixed(3);
+  }
+
   function applyZoom() {
+    fitScriptPaper();
     const z = state.prefs.zoom === 'fit' ? fitZoom() : state.prefs.zoom;
     $('#pages').style.zoom = z;
     $('#zoom-label').textContent = state.prefs.zoom === 'fit' ? 'Fit' : Math.round(z * 100) + '%';
@@ -403,11 +455,21 @@
     const tab = state.prefs.outlineTab;
     $$('.outline-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.otab === tab));
     if (tab === 'scenes') {
-      body.innerHTML = st.scenes.length
-        ? st.scenes
-            .map((s, k) => `<button class="ol-item" data-line="${s.line}"><span class="ol-num">${esc(s.number || String(k + 1))}</span><span class="ol-text">${esc(s.text)}</span><span class="ol-page">p${s.page}</span></button>`)
-            .join('')
-        : '<p class="ol-empty">No scenes yet. Start a line with INT. or EXT.</p>';
+      let html = '';
+      let ep = 0;
+      let n = 0;
+      const eps = st.episodes || [];
+      const epHead = (e) => `<button class="ol-item ol-ep" data-line="${e.line}"><span class="ol-text">${esc(e.text)}</span><span class="ol-page">p${e.page}</span></button>`;
+      st.scenes.forEach((s) => {
+        while (ep < eps.length && eps[ep].line < s.line) {
+          html += epHead(eps[ep++]);
+          if (model.options.restartSceneNumbers) n = 0;
+        }
+        n++;
+        html += `<button class="ol-item" data-line="${s.line}"><span class="ol-num">${esc(s.number || String(n))}</span><span class="ol-text">${esc(s.text)}</span><span class="ol-page">p${s.page}</span></button>`;
+      });
+      while (ep < eps.length) html += epHead(eps[ep++]);
+      body.innerHTML = html || '<p class="ol-empty">No scenes yet. Start a line with INT. or EXT.</p>';
     } else if (tab === 'characters') {
       const max = st.characters.length ? st.characters[0].count : 1;
       body.innerHTML = st.characters.length
@@ -420,6 +482,7 @@
         <div class="stat"><b>${st.pages}</b><span>Pages</span></div>
         <div class="stat"><b>~${st.runtimeMinutes}m</b><span>Screen time</span></div>
         <div class="stat"><b>${st.scenes.length}</b><span>Scenes</span></div>
+        <div class="stat"><b>${(st.episodes || []).length}</b><span>Episodes</span></div>
         <div class="stat"><b>${st.characters.length}</b><span>Speaking roles</span></div>
         <div class="stat"><b>${st.words.toLocaleString()}</b><span>Words</span></div>
         <div class="stat"><b>${esc(model.size.label)}</b><span>Paper</span></div>
@@ -452,7 +515,7 @@
   }
 
   function updateWelcome() {
-    const empty = ed().value.trim() === '';
+    const empty = (current().content || '').trim() === '';
     $('#welcome').hidden = !(empty && !welcomeDismissed);
   }
 
@@ -463,8 +526,14 @@
   function render() {
     const s = current();
     model = SF.layout(s.content, s.settings);
-    lineTypes = SF.lineTypes(s.content);
+    lineTypes = isScript() ? [] : SF.lineTypes(s.content);
+    linePage = new Map();
+    model.pages.forEach((p) => p.items.forEach((it) => it.src != null && !linePage.has(it.src) && linePage.set(it.src, p.number)));
     renderPages();
+    if (isScript()) {
+      se.markPages(model);
+      se.setPageStyle(model, s.settings);
+    }
     renderStats();
     renderOutline();
     updateStatus();
@@ -490,16 +559,50 @@
   let lineEls = null;
   let lastHl = null;
   function updateStatus() {
-    const ta = ed();
-    const v = ta.value;
-    const pos = ta.selectionStart;
-    const idx = lineIndexAt(v, pos);
-    const col = pos - lineBounds(v, pos).start + 1;
-    $('#st-pos').textContent = `Ln ${idx + 1}, Col ${col}`;
+    let idx;
+    if (isScript()) {
+      const el = se.currentEl();
+      const ei = el ? se.elements().indexOf(el) : 0;
+      idx = se.lineForElement(ei);
+      if (idx < 0) idx = se.lineForElement(Math.max(0, ei - 1));
+      const page = linePage.get(idx) || nearestPage(idx);
+      $('#st-pos').textContent = `Page ${page} of ${model ? model.pages.length : 1}`;
+      $('#dual-btn').classList.toggle('on', !!(el && el.dataset.dual === '1'));
+    } else {
+      const ta = ed();
+      const v = ta.value;
+      const pos = ta.selectionStart;
+      idx = lineIndexAt(v, pos);
+      const col = pos - lineBounds(v, pos).start + 1;
+      $('#st-pos').textContent = `Ln ${idx + 1}, Col ${col}`;
+    }
     const type = currentType();
     $('#st-element').textContent = ELEMENT_LABELS[type] || type;
+    const sel = $('#el-select');
+    if ([...sel.options].some((o) => o.value === type)) sel.value = type;
     $$('.tool[data-el]').forEach((b) => b.classList.toggle('current', b.dataset.el === type));
     return idx;
+  }
+
+  function nearestPage(line) {
+    let best = 1;
+    linePage.forEach((pg, l) => {
+      if (l <= line && pg > best) best = pg;
+    });
+    return best;
+  }
+
+  /** Change the current element in whichever editor is active. */
+  function applyElement(type) {
+    welcomeDismissed = true;
+    updateWelcome();
+    if (isScript()) se.setType(type);
+    else setElement(type);
+  }
+
+  function applyFormat(marker) {
+    if (isScript()) se.format(marker === '**' ? 'b' : marker === '*' ? 'i' : 'u');
+    else wrapSelection(marker);
   }
 
   function highlightPreview(lineIdx, scroll) {
@@ -555,6 +658,12 @@
   }
 
   function gotoLine(line, focusEditor) {
+    if (isScript()) {
+      if ($('#app').dataset.view === 'preview' || (window.innerWidth <= 900 && $('#app').dataset.view !== 'write')) setView('write');
+      se.revealElement(se.elementIndexForLine(line));
+      afterCaretMove();
+      return;
+    }
     const ta = ed();
     const pos = posOfLine(ta.value, line);
     if ($('#app').dataset.view === 'preview' || (window.innerWidth <= 900 && $('#app').dataset.view !== 'write')) setView('write');
@@ -570,12 +679,25 @@
   // ---------------------------------------------------------------------------
   function openScript(id) {
     if (!state.scripts.some((s) => s.id === id)) return;
+    if (se && isScript() && current() && current().id !== id) se.sync(); // flush pending edits to the old script
     state.currentId = id;
     welcomeDismissed = false;
     const s = current();
     ed().value = s.content;
     ed().setSelectionRange(0, 0);
     ed().scrollTop = 0;
+    if (isScript()) {
+      const { lost } = SF.editorFromFountain(s.content);
+      if (lost) {
+        // Notes / sections / boneyard only exist in Fountain — don't silently drop them
+        state.prefs.editorMode = 'text';
+        applyMode();
+        toast('This script has [[notes]] or sections, so it opened in Fountain view.');
+      } else {
+        se.load(s.content);
+        $('#script-host').scrollTop = 0;
+      }
+    }
     $('#doc-title').value = s.name;
     document.title = `${s.name || 'Untitled script'} — ReelScript`;
     $('#preview-scroll').scrollTop = 0;
@@ -664,11 +786,21 @@
   async function exportAs(kind) {
     closeExportMenu();
     const s = current();
+    s.content = content();
     if (!model) render();
     const base = slug(s.name);
     if (kind === 'fountain') {
       download(`${base}.fountain`, s.content, 'text/plain;charset=utf-8');
       toast('Fountain file downloaded');
+    } else if (kind === 'docx') {
+      try {
+        const tf = SF.getTitleFields(s.content);
+        download(`${base}.docx`, new Blob([SF.buildDOCX(s.content, s.settings, { title: SF.plainText(tf.title || s.name), author: tf.authors.replace(/\n/g, ', ') })], { type: MIME_DOCX }), MIME_DOCX);
+        toast('Word document downloaded');
+      } catch (e) {
+        console.error(e);
+        toast('Word export failed.');
+      }
     } else if (kind === 'fdx') {
       download(`${base}.fdx`, SF.toFDX(s.content), 'application/xml;charset=utf-8');
       toast('Final Draft file downloaded');
@@ -710,14 +842,23 @@
   }
 
   function runCleanup() {
-    const before = ed().value;
+    const before = content();
     const after = SF.cleanup(before);
     if (after.trim() === before.trim()) {
       toast('Already looks clean ✨');
       return;
     }
-    replaceAll(after);
-    toast('Formatting cleaned up', { label: 'Undo', run: () => { ed().focus(); document.execCommand('undo'); } });
+    setContent(after);
+    toast('Formatting cleaned up', {
+      label: 'Undo',
+      run: () => {
+        if (isScript()) se.undo();
+        else {
+          ed().focus();
+          document.execCommand('undo');
+        }
+      },
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -752,7 +893,7 @@
   }
 
   function openTitle() {
-    const vals = SF.getTitleFields(ed().value);
+    const vals = SF.getTitleFields(content());
     const f = $('#title-form');
     Object.entries(vals).forEach(([k, v]) => {
       if (f.elements[k]) f.elements[k].value = v;
@@ -766,7 +907,11 @@
     const vals = {};
     ['title', 'credit', 'authors', 'source', 'draft date', 'contact', 'copyright'].forEach((k) => (vals[k] = f.elements[k].value));
     welcomeDismissed = true;
-    replaceAll(SF.setTitleFields(ed().value, vals));
+    if (isScript()) {
+      se.checkpoint();
+      se.setTitleBlock(SF.setTitleFields('', vals).trim());
+      se.sync();
+    } else replaceAll(SF.setTitleFields(ed().value, vals));
     const s = current();
     if (vals.title.trim() && /^untitled/i.test(s.name)) {
       s.name = SF.plainText(vals.title.trim()).replace(/\s+/g, ' ');
@@ -778,6 +923,49 @@
       render();
     }
     toast('Title page updated');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Editor mode: Script (Final Draft style) ⇄ Fountain (plain text)
+  // ---------------------------------------------------------------------------
+  function applyMode() {
+    const script = isScript();
+    $('#app').dataset.mode = state.prefs.editorMode;
+    $('#script-host').hidden = !script;
+    ed().hidden = script;
+    $$('.mode-switch button').forEach((b) => b.classList.toggle('active', b.dataset.mode === state.prefs.editorMode));
+  }
+
+  async function setMode(mode, silent) {
+    if (mode === state.prefs.editorMode) return;
+    if (mode === 'script') {
+      const text = ed().value;
+      const { lost } = SF.editorFromFountain(text);
+      if (lost && !silent) {
+        const v = await confirmDialog({
+          title: 'Switch to Script view?',
+          text: 'Script view shows printable elements only. [[Notes]], /* hidden text */, # sections and = synopses in this script will be removed once you edit it there. Export a .fountain copy first if you need them.',
+          buttons: [
+            { label: 'Stay in Fountain', value: 'cancel' },
+            { label: 'Switch anyway', value: 'ok', cls: 'btn-primary' },
+          ],
+        });
+        if (v !== 'ok') return;
+      }
+      state.prefs.editorMode = 'script';
+      se.load(text);
+    } else {
+      const text = se.sync();
+      state.prefs.editorMode = 'text';
+      ed().value = text;
+    }
+    applyMode();
+    render();
+    persist();
+    if (!silent) {
+      if (isScript()) se.focus();
+      else ed().focus();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -828,9 +1016,9 @@
         wrapSelection(k === 'b' ? '**' : k === 'i' ? '*' : '_');
         return;
       }
-      if (/^[1-7]$/.test(e.key)) {
+      if (/^[0-7]$/.test(e.key)) {
         e.preventDefault();
-        setElement(SHORTCUT_ELEMENTS[+e.key - 1]);
+        setElement(e.key === '0' ? 'episode' : SHORTCUT_ELEMENTS[+e.key - 1]);
         return;
       }
     }
@@ -931,7 +1119,6 @@
 
     $('#new-script').addEventListener('click', () => {
       createScript();
-      ed().focus();
     });
     $('#import-btn').addEventListener('click', () => $('#import-file').click());
     $('#import-file').addEventListener('change', (e) => {
@@ -1005,7 +1192,7 @@
       $('#paste-input').value = '';
       if (!text.trim()) return;
       welcomeDismissed = true;
-      replaceAll(SF.cleanup(text));
+      setContent(SF.cleanup(text));
       toast('Cleaned up — check the preview →');
     });
 
@@ -1029,16 +1216,30 @@
 
     $$('.tool[data-el]').forEach((b) => {
       b.addEventListener('mousedown', (e) => e.preventDefault()); // keep editor caret
-      b.addEventListener('click', () => {
-        welcomeDismissed = true;
-        updateWelcome();
-        setElement(b.dataset.el);
-      });
+      b.addEventListener('click', () => applyElement(b.dataset.el));
     });
     $$('.tool[data-wrap]').forEach((b) => {
       b.addEventListener('mousedown', (e) => e.preventDefault());
-      b.addEventListener('click', () => wrapSelection(b.dataset.wrap));
+      b.addEventListener('click', () => applyFormat(b.dataset.wrap));
     });
+    $('#el-select').addEventListener('change', (e) => {
+      applyElement(e.target.value);
+      if (isScript()) se.root.focus({ preventScroll: true });
+    });
+    $('#dual-btn').addEventListener('mousedown', (e) => e.preventDefault());
+    $('#dual-btn').addEventListener('click', () => {
+      if (isScript()) {
+        if (!se.toggleDual()) toast('Put the cursor in the second character name of the pair, then press Dual.');
+        else afterCaretMove();
+      } else {
+        const ta = ed();
+        const { start, end } = lineBounds(ta.value, ta.selectionStart);
+        const line = ta.value.slice(start, end);
+        if (currentType() !== 'character') return toast('Put the cursor on the second character name, then press Dual.');
+        replaceRange(start, end, /\^\s*$/.test(line) ? line.replace(/\s*\^\s*$/, '') : line.trimEnd() + ' ^', end + 2);
+      }
+    });
+    $$('.mode-switch button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
     $('#cleanup-btn').addEventListener('click', runCleanup);
 
     $('#welcome').addEventListener('click', (e) => {
@@ -1048,10 +1249,14 @@
       if (act === 'write') {
         welcomeDismissed = true;
         updateWelcome();
-        ed().focus();
+        if (isScript()) {
+          se.focus();
+          const first = se.elements()[0];
+          if (first && !first.textContent) se.setType('scene_heading', first);
+        } else ed().focus();
       } else if (act === 'sample') {
         welcomeDismissed = true;
-        replaceAll(SF.SAMPLE);
+        setContent(SF.SAMPLE);
         if (/^untitled/i.test(current().name)) {
           current().name = 'The Last Chai (sample)';
           $('#doc-title').value = current().name;
@@ -1111,7 +1316,12 @@
     }
     load();
     applyTheme();
+    se = new SF.ScriptEditor($('#script-host'), {
+      onChange: onScriptChange,
+      onCaret: afterCaretMove,
+    });
     bind();
+    applyMode();
     $('#app').dataset.view = state.prefs.view;
     setView(state.prefs.view);
     toggleOutline(state.prefs.outlineOpen);

@@ -13,6 +13,10 @@
   const TITLE_KEY_RE = /^(title|credit|author|authors|source|draft date|date|contact|copyright|notes|revision|written by)\s*:/i;
   const TRANSITION_WORDS_RE = /^(FADE OUT\.?|FADE TO BLACK\.?|CUT TO BLACK\.?|SMASH CUT TO BLACK\.?|END CREDITS\.?)$/;
   const NOTE_SENTINEL = '\u0001';
+  // Episode / act headings (Final Draft "New Act"). Matches e.g. "EPISODE 1", "Episode 2: The Return",
+  // "EP 04 - LOST", "EP.5", "एपिसोड 3", "ఎపిసోడ్ 7", "ACT ONE", "COLD OPEN".
+  const EPISODE_RE = /^(?:EPISODE|EPISODIO|ÉPISODE|EPISODE NO\.?|EPI|EP|एपिसोड|ఎపిసోడ్|எபிசோட்|എപ്പിസോഡ്|ಎಪಿಸೋಡ್|এপিসোড)\s*(?:NO\.?|#)?\s*[-:.#]?\s*\d+(?=$|[\s:.\-–—)])/iu;
+  const ACT_RE = /^(?:ACT\s+(?:\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|I{1,3}|IV|V|VI{0,3})|END OF (?:ACT|EPISODE)\b.*|COLD OPEN|TEASER|TAG)\.?$/;
 
   function normalize(src) {
     return String(src == null ? '' : src)
@@ -29,6 +33,11 @@
 
   function isAllCaps(s) {
     return hasUpper(s) && s === s.toUpperCase();
+  }
+
+  function isEpisode(line) {
+    const t = plainText(line.replace(/^#+\s*/, '')).trim();
+    return EPISODE_RE.test(t) || ACT_RE.test(t);
   }
 
   function isSceneHeading(line) {
@@ -108,7 +117,9 @@
     const tokens = [];
     const lines = allLines;
 
+    const softBreak = new Set(); // lines treated as if preceded by a blank line
     const prevBlankAt = (i) => {
+      if (softBreak.has(i)) return true;
       for (let k = i - 1; k >= lineCount; k--) {
         if (lines[k] === null) continue;
         return isBlank(lines[k]);
@@ -135,9 +146,21 @@
         tokens.push({ type: 'page_break', line: i });
         continue;
       }
+      if (line.startsWith('#!')) {
+        tokens.push({ type: 'episode', text: line.slice(2).trim(), line: i });
+        continue;
+      }
       if (line.startsWith('#')) {
         const depth = /^#+/.exec(line)[0].length;
-        tokens.push({ type: 'section', depth, text: line.slice(depth).trim(), line: i });
+        const text = line.slice(depth).trim();
+        if (isEpisode(text)) tokens.push({ type: 'episode', text, line: i });
+        else tokens.push({ type: 'section', depth, text, line: i });
+        continue;
+      }
+      if (prevBlank && isEpisode(line) && !isSceneHeading(line)) {
+        tokens.push({ type: 'episode', text: line, line: i });
+        // An episode heading ends its "paragraph": the next line starts fresh.
+        softBreak.add(i + 1);
         continue;
       }
       if (/^=(?!=)/.test(line)) {
@@ -189,7 +212,7 @@
         for (; j < lines.length; j++) {
           const l = lines[j];
           if (l === null) continue;
-          if (isBlank(l) && l !== '  ') break;
+          if ((isBlank(l) && l !== '  ') || softBreak.has(j)) break;
           const t = l.trim();
           if (/^\(.*\)$/.test(t)) block.parts.push({ type: 'parenthetical', text: t, line: j });
           else if (t.startsWith('~')) block.parts.push({ type: 'lyrics', text: t.slice(1).trim(), line: j });
@@ -217,7 +240,7 @@
       for (; j < lines.length; j++) {
         const l = lines[j];
         if (l === null) continue;
-        if (isBlank(l)) break;
+        if (isBlank(l) || (j > i && softBreak.has(j))) break;
         let t = l.trim();
         if (j === i && forcedAction) t = t.slice(1);
         actionLines.push({ text: t, line: j });
@@ -258,7 +281,10 @@
         continue;
       }
       if (c === '*') {
-        const n = text.startsWith('***', p) ? 3 : text.startsWith('**', p) ? 2 : 1;
+        let n = text.startsWith('***', p) ? 3 : text.startsWith('**', p) ? 2 : 1;
+        // "**bold***italic*": close the open style first rather than reading a bold-italic toggle
+        if (n === 3 && st.b && !st.i) n = 2;
+        else if (n === 3 && st.i && !st.b) n = 1;
         const marker = '*'.repeat(n);
         const on = n === 3 ? st.b && st.i : n === 2 ? st.b : st.i;
         if (on || hasCloser(marker, p + n)) {
@@ -396,6 +422,14 @@
         continue;
       }
 
+      if (isEpisode(t) && !isSceneHeading(t)) {
+        pushBlank();
+        out.push(t.replace(/^#+\s*/, ''));
+        out.push('');
+        mode = 'none';
+        continue;
+      }
+
       const sceneM = /^(\d+[A-Z]?[.)]?\s+)?((?:INT|EXT|EST|INT\.?\s*\/\s*EXT|EXT\.?\s*\/\s*INT|I\/E)\b)[.:\-\s]*(.*?)(\s+\d+[A-Z]?\.?)?$/i.exec(t);
       if (sceneM && (isAllCaps(t) || /^(int|ext|est|i\/e)\b/i.test(t))) {
         const prefix = sceneM[2].toUpperCase().replace(/\s+/g, '').replace(/\.?\/\.?/, './').replace(/\.$/, '');
@@ -498,6 +532,7 @@
     getTitleFields,
     setTitleFields,
     isSceneHeading,
+    isEpisode,
     isCharacterCue,
     isTransition,
     isAllCaps,

@@ -5,7 +5,7 @@
 'use strict';
 const path = require('path');
 const assert = require('assert');
-['parser', 'layout', 'export', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
+['parser', 'layout', 'export', 'docx', 'editor', 'sample'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
 const SF = globalThis.SF;
 
 let passed = 0;
@@ -195,10 +195,81 @@ test('PDF builds with jsPDF', () => {
   const jsPDF = require(path.join(__dirname, '..', 'vendor', 'jspdf.umd.min.js')).jsPDF;
   globalThis.jspdf = { jsPDF };
   const doc = SF.buildPDF(SF.layout(SF.SAMPLE, { watermark: 'DRAFT' }), { title: 'T' });
-  assert.strictEqual(doc.getNumberOfPages(), 3);
+  assert.strictEqual(doc.getNumberOfPages(), 3); // title page + episode 1 + episode 2 (starts a new page)
   const out = doc.output();
   assert.ok(out.startsWith('%PDF-'));
   assert.ok(/Courier/.test(out));
+});
+
+// ---------------------------------------------------------------- episodes
+test('episode headings in many spellings', () => {
+  ['EPISODE 1', 'Episode 2: The Return', 'EP 04 - LOST', 'EP.5', 'ఎపిసోడ్ 3', 'एपिसोड 7', 'ACT ONE', '# Episode 9', '#! The Pilot'].forEach((h) => {
+    assert.deepStrictEqual(types(`${h}\n\nINT. A - DAY\n`), ['episode', 'scene_heading'], h);
+  });
+});
+
+test('episode directly above a scene heading is not read as a character', () => {
+  assert.deepStrictEqual(types('EPISODE 1\nINT. HOUSE - DAY\n\nHi.'), ['episode', 'scene_heading', 'action']);
+  assert.deepStrictEqual(types('EP 2\nRavi walks.\nHe stops.'), ['episode', 'action']);
+  assert.deepStrictEqual(types('EPIC\nHello.'), ['dialogue']);
+});
+
+test('episodes: new page, centered bold underline, scene numbers restart', () => {
+  const m = SF.layout('EPISODE 1\n\nINT. A - DAY\n\nX.\n\nINT. B - DAY\n\nY.\n\nEPISODE 2\n\nINT. C - DAY\n\nZ.', { sceneNumbers: 'left', numberScenesAutomatically: true });
+  assert.strictEqual(m.pages.length, 2);
+  const ep = body(m, 1)[0];
+  assert.strictEqual(ep.kind, 'episode');
+  assert.ok(ep.segs[0].runs[0].b && ep.segs[0].runs[0].u);
+  assert.deepStrictEqual(m.stats.scenes.map((s) => s.number), ['1', '2', '1']);
+  assert.strictEqual(m.stats.episodes.length, 2);
+  const one = SF.layout('EPISODE 1\n\nX.\n\nEPISODE 2\n\nY.', { episodeNewPage: false });
+  assert.strictEqual(one.pages.length, 1);
+});
+
+test('FDX: episodes export as New Act and import back', () => {
+  const x = SF.toFDX('EPISODE 1\n\nINT. A - DAY\n\nX.\n\nEPISODE 2\n\nY.');
+  assert.ok(x.includes('<Paragraph Type="New Act"><Text>EPISODE 1</Text>'));
+  assert.ok(x.includes('<Paragraph Type="New Act" StartsNewPage="Yes"><Text>EPISODE 2</Text>'));
+});
+
+// ---------------------------------------------------------------- script editor model
+test('script editor ⇄ Fountain round-trip is lossless for printable content', () => {
+  const sig = (m) => m.pages.map((p) => p.items.map((i) => i.segs.map((s) => s.x.toFixed(2) + s.runs.map((r) => (r.b ? 'B' : '') + (r.i ? 'I' : '') + (r.u ? 'U' : '') + r.text).join('')).join('|')).join('\n')).join('\n==\n');
+  [SF.SAMPLE, 'EPISODE 1\nINT. A - DAY\n\nLOUD BANG!\n\nCUT TO:\n\nCUT TO: THE CHASE\n\nBOB\n(beat)\n**bold***it* _u_\nline two\n\nALICE ^\nHi.\n\n===\n\n> THE END <'].forEach((src) => {
+    const { titleBlock, els } = SF.editorFromFountain(src);
+    const back = SF.editorToFountain(titleBlock, els).text;
+    assert.strictEqual(sig(SF.layout(back)), sig(SF.layout(src)));
+  });
+});
+
+test('script editor: speech without a cue is kept as action, all-caps action is forced', () => {
+  const { text } = SF.editorToFountain('', [
+    { type: 'dialogue', text: 'Orphan line.' },
+    { type: 'action', text: 'BOOM' },
+    { type: 'character', text: 'bob' },
+    { type: 'dialogue', text: 'Hi.' },
+  ]);
+  assert.deepStrictEqual(types(text), ['action', 'action', 'dialogue']);
+  assert.ok(text.includes('BOB\nHi.'));
+});
+
+// ---------------------------------------------------------------- docx
+test('DOCX is a valid zip with screenplay styles', () => {
+  const bytes = SF.buildDOCX(SF.SAMPLE, {}, { title: 'T' });
+  const buf = Buffer.from(bytes);
+  assert.strictEqual(buf.readUInt32LE(0), 0x04034b50);
+  const str = buf.toString('utf8');
+  ['word/document.xml', 'word/styles.xml', '[Content_Types].xml', 'w:styleId="SceneHeading"', 'w:styleId="Episode"', 'w:pStyle w:val="Character"', 'EPISODE 1: THE FIRST CUP', 'w:pageBreakBefore'].forEach((needle) => assert.ok(str.includes(needle), needle));
+  // CRC of stored entries must match
+  let p = 0;
+  while (buf.readUInt32LE(p) === 0x04034b50) {
+    const crc = buf.readUInt32LE(p + 14);
+    const size = buf.readUInt32LE(p + 18);
+    const nlen = buf.readUInt16LE(p + 26);
+    const data = buf.subarray(p + 30 + nlen, p + 30 + nlen + size);
+    assert.strictEqual(SF.crc32(data), crc);
+    p += 30 + nlen + size;
+  }
 });
 
 // ----------------------------------------------------------------

@@ -68,6 +68,7 @@
           <div class="menu" id="export-menu" role="menu" hidden>
             <button role="menuitem" data-export="pdf"><svg class="i"><use href="#i-file"/></svg><span><strong>PDF</strong><small>Industry-standard, print ready</small></span></button>
             <button role="menuitem" data-export="print"><svg class="i"><use href="#i-printer"/></svg><span><strong>Print / Save as PDF</strong><small>Uses your browser, any language</small></span></button>
+            <button role="menuitem" data-export="docx"><svg class="i"><use href="#i-doc"/></svg><span><strong>Word (.docx)</strong><small>Editable in Word, Google Docs, Pages</small></span></button>
             <button role="menuitem" data-export="fdx"><svg class="i"><use href="#i-film"/></svg><span><strong>Final Draft (.fdx)</strong><small>Open in Final Draft, WriterDuet…</small></span></button>
             <button role="menuitem" data-export="fountain"><svg class="i"><use href="#i-code"/></svg><span><strong>Fountain (.fountain)</strong><small>Plain-text screenplay source</small></span></button>
           </div>
@@ -76,6 +77,27 @@
 
       <div class="toolbar" role="toolbar" aria-label="Screenplay elements">
         <div class="tool-group">
+          <div class="mode-switch" role="tablist" aria-label="Editor">
+            <button role="tab" data-mode="script" title="Final Draft–style page editor">Script</button>
+            <button role="tab" data-mode="text" title="Plain-text Fountain editor">Fountain</button>
+          </div>
+          <label class="el-select-wrap" title="Current element (Tab / Enter change it)">
+            <select id="el-select" aria-label="Element">
+              <option value="episode">Episode / New Act</option>
+              <option value="scene_heading">Scene Heading</option>
+              <option value="action">Action</option>
+              <option value="character">Character</option>
+              <option value="parenthetical">Parenthetical</option>
+              <option value="dialogue">Dialogue</option>
+              <option value="transition">Transition</option>
+              <option value="centered">Centered</option>
+              <option value="page_break">Page Break</option>
+            </select>
+          </label>
+        </div>
+        <div class="tool-sep"></div>
+        <div class="tool-group">
+          <button class="tool" data-el="episode" title="Episode / New Act (Ctrl+0)">Episode</button>
           <button class="tool" data-el="scene_heading" title="Scene heading (Ctrl+1)">Scene</button>
           <button class="tool" data-el="action" title="Action (Ctrl+2)">Action</button>
           <button class="tool" data-el="character" title="Character (Ctrl+3)">Character</button>
@@ -84,6 +106,7 @@
           <button class="tool" data-el="transition" title="Transition (Ctrl+6)">Transition</button>
           <button class="tool" data-el="centered" title="Centered (Ctrl+7)">Centered</button>
           <button class="tool" data-el="page_break" title="Page break">Page break</button>
+          <button class="tool" id="dual-btn" title="Make this character's speech dual dialogue (side by side with the previous one)">Dual</button>
         </div>
         <div class="tool-sep"></div>
         <div class="tool-group">
@@ -102,11 +125,12 @@
         <section class="pane editor-pane" aria-label="Editor">
           <div class="editor-wrap">
             <textarea id="editor" spellcheck="true" autocapitalize="off" autocomplete="off" aria-label="Screenplay text"></textarea>
+            <div id="script-host" hidden></div>
             <div class="welcome" id="welcome" hidden>
               <div class="welcome-inner">
                 <div class="welcome-badge"><svg class="i"><use href="#i-sparkles"/></svg>Screenplay formatter</div>
                 <h1>What are we writing today?</h1>
-                <p>Type naturally — scene headings, character names and dialogue are formatted to industry standard as you go. Export a print-ready PDF any time.</p>
+                <p>Write like you would in Final Draft. Enter and Tab move between scene headings, action, characters and dialogue, already formatted on the page. Export to PDF, Word or Final Draft any time.</p>
                 <div class="cards">
                   <button class="card" data-welcome="write"><svg class="i"><use href="#i-pen"/></svg><strong>Start writing</strong><span>Blank page, Fountain syntax</span></button>
                   <button class="card" data-welcome="sample"><svg class="i"><use href="#i-film"/></svg><strong>Open a sample</strong><span>See every element in action</span></button>
@@ -167,6 +191,8 @@
         <label class="check"><input type="checkbox" name="underlineSceneHeadings"> Underline scene headings</label>
         <label class="check"><input type="checkbox" name="doubleSpaceSceneHeadings"> Extra blank line before scene headings</label>
         <label class="check"><input type="checkbox" name="autoContd"> Add (CONT'D) when a character keeps talking</label>
+        <label class="check"><input type="checkbox" name="episodeNewPage"> Start each episode on a new page</label>
+        <label class="check"><input type="checkbox" name="restartSceneNumbers"> Restart scene numbers in each episode</label>
         <label class="check"><input type="checkbox" name="titlePage"> Include title page</label>
         <label>Page header text <small>e.g. "Blue Revision 03/10"</small>
           <input name="headerText" maxlength="50" placeholder="Optional">
@@ -174,7 +200,7 @@
         <label>Watermark <small>Printed faintly across every page</small>
           <input name="watermark" maxlength="40" placeholder="e.g. CONFIDENTIAL">
         </label>
-        <label class="check span-2"><input type="checkbox" name="smartEnter"> Smart Enter — Enter after dialogue starts a new paragraph (Shift+Enter for a plain line break)</label>
+        <label class="check span-2"><input type="checkbox" name="smartEnter"> Fountain view: Smart Enter — Enter after dialogue starts a new paragraph (Shift+Enter for a plain line break)</label>
       </div>
       <footer class="modal-foot"><button class="btn btn-ghost" value="cancel">Cancel</button><button class="btn btn-primary" value="save" id="settings-save">Save settings</button></footer>
     </form>
@@ -219,10 +245,29 @@
     <form method="dialog" class="modal-card wide">
       <header class="modal-head"><h2>Formatting guide</h2><button class="icon-btn" value="cancel" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></header>
       <div class="modal-body guide">
-        <p class="muted">ReelScript reads <a href="https://fountain.io/syntax" target="_blank" rel="noopener">Fountain</a>, the plain-text screenplay format. Leave a blank line between elements.</p>
+        <h3 style="margin-top:4px">Script view (Final Draft style)</h3>
+        <p class="muted">Type straight onto the page. Every paragraph is an element; the dropdown in the toolbar shows which one you're in.</p>
+        <table>
+          <thead><tr><th>In this element</th><th><kbd>Enter</kbd> goes to</th><th><kbd>Tab</kbd> changes to</th></tr></thead>
+          <tbody>
+            <tr><td>Episode / New Act</td><td>Scene Heading</td><td>Scene Heading</td></tr>
+            <tr><td>Scene Heading</td><td>Action</td><td>Action</td></tr>
+            <tr><td>Action</td><td>Action</td><td>Character</td></tr>
+            <tr><td>Character</td><td>Dialogue</td><td>Transition</td></tr>
+            <tr><td>Parenthetical</td><td>Dialogue</td><td>Dialogue</td></tr>
+            <tr><td>Dialogue</td><td>Action</td><td>Parenthetical (new line below)</td></tr>
+            <tr><td>Transition</td><td>Scene Heading</td><td>Scene Heading</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">SmartType suggests character names, INT./EXT., locations, times of day, extensions like (V.O.) and transitions. Press <kbd>Tab</kbd> or <kbd>Enter</kbd> to accept, <kbd>Esc</kbd> to dismiss. Pressing <kbd>Enter</kbd> on an empty line turns it into Action. Use <kbd>Shift</kbd>+<kbd>Tab</kbd> to go back.</p>
+        <h3>Episodes</h3>
+        <p class="muted">Pick <strong>Episode</strong> from the dropdown, or in Fountain view type a line such as <code>EPISODE 1</code>, <code>Episode 2: The Return</code>, <code>EP 04 - LOST</code>, <code>ఎపిసోడ్ 3</code> or <code>ACT ONE</code> (or anything after <code>#!</code>). Episodes print centered, bold and underlined like Final Draft's New Act, start a new page, and restart scene numbers (both can be changed in Page settings).</p>
+        <h3>Fountain view</h3>
+        <p class="muted">ReelScript stores scripts as <a href="https://fountain.io/syntax" target="_blank" rel="noopener">Fountain</a>, the plain-text screenplay format. Leave a blank line between elements.</p>
         <table>
           <thead><tr><th>Element</th><th>Type this</th><th>Notes</th></tr></thead>
           <tbody>
+            <tr><td>Episode</td><td><code>EPISODE 1: THE FIRST CUP</code></td><td>Or <code>#! Any title</code></td></tr>
             <tr><td>Scene heading</td><td><code>INT. TEA STALL - NIGHT</code></td><td>Starts with INT, EXT, EST, INT/EXT or I/E. Force any line with a leading <code>.</code></td></tr>
             <tr><td>Scene number</td><td><code>EXT. ROOF - DAY #12A#</code></td><td>Shown when scene numbers are on</td></tr>
             <tr><td>Action</td><td><code>Rain hammers the tin roof.</code></td><td>Any paragraph. Force with <code>!</code></td></tr>
@@ -240,8 +285,9 @@
         </table>
         <h3>Keyboard</h3>
         <ul class="kbd-list">
-          <li><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> cycle the current line's element</li>
-          <li><kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>7</kbd> scene, action, character, paren, dialogue, transition, centered</li>
+          <li><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> change the current element</li>
+          <li><kbd>Ctrl</kbd>+<kbd>0</kbd> episode · <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>7</kbd> scene, action, character, paren, dialogue, transition, centered</li>
+          <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> undo / redo</li>
           <li><kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> bold, italic, underline</li>
           <li><kbd>Ctrl</kbd>+<kbd>S</kbd> save now · <kbd>Ctrl</kbd>+<kbd>P</kbd> download PDF</li>
         </ul>
@@ -275,6 +321,7 @@
       <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
       <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8zM5 2l.6 1.4L7 4l-1.4.6L5 6l-.6-1.4L3 4l1.4-.6z"/></symbol>
       <symbol id="i-id" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></symbol>
+      <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 12l1.5 6 2.5-5 2.5 5 1.5-6"/></symbol>
       <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
       <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></symbol>
     </defs>
@@ -284,6 +331,8 @@
   <script src="js/parser.js" defer></script>
   <script src="js/layout.js" defer></script>
   <script src="js/export.js" defer></script>
+  <script src="js/docx.js" defer></script>
+  <script src="js/editor.js" defer></script>
   <script src="js/sample.js" defer></script>
   <script src="js/app.js" defer></script>
 </body>

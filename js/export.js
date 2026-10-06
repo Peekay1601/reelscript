@@ -151,6 +151,10 @@
 
     parsed.tokens.forEach((t) => {
       switch (t.type) {
+        case 'episode':
+          newPage = out.length > 0;
+          out.push(para('New Act', t.text.toUpperCase()));
+          break;
         case 'scene_heading':
           out.push(para('Scene Heading', t.text.toUpperCase(), t.number ? ` Number="${xmlEscape(t.number)}"` : ''));
           break;
@@ -253,6 +257,14 @@
         out.push('===');
       }
       switch (type) {
+        case 'New Act':
+        case 'End of Act': {
+          blank();
+          const t = text.trim();
+          out.push(SF.isEpisode(t) ? t : '#! ' + t);
+          blank();
+          break;
+        }
         case 'Scene Heading': {
           blank();
           const n = p.getAttribute('Number');

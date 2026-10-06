@@ -9,6 +9,8 @@ Contact:
     yourname@example.com
     +91 00000 00000
 
+EPISODE 1: THE FIRST CUP
+
 FADE IN:
 
 EXT. MUMBAI LOCAL TRAIN STATION - NIGHT #1#
@@ -55,7 +57,9 @@ She sprints. Ravi watches her disappear into the crowd, then reaches under the c
 
 CUT TO:
 
-INT. RAVI'S TEA STALL - LATER #2#
+EPISODE 2: ONE MORE CUP
+
+INT. RAVI'S TEA STALL - LATER #1#
 
 The station is empty. Ravi wipes down the counter. A lone glass sits upside down — waiting.
 

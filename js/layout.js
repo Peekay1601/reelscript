@@ -39,7 +39,7 @@
   const DEFAULTS = {
     pageSize: 'letter',
     sceneNumbers: 'none', // none | left | right | both
-    boldSceneHeadings: true,
+    boldSceneHeadings: false,
     underlineSceneHeadings: false,
     doubleSpaceSceneHeadings: true,
     autoContd: true,
@@ -47,6 +47,8 @@
     watermark: '',
     headerText: '',
     numberScenesAutomatically: false,
+    episodeNewPage: true,
+    restartSceneNumbers: true,
   };
 
   // --------------------------------------------------------------------------
@@ -155,6 +157,7 @@
     const blocks = [];
     let lastSpeaker = null;
     let sceneCounter = 0;
+    let episode = null;
 
     const speakerName = (d) => {
       let name = d.character;
@@ -166,6 +169,15 @@
 
     parsed.tokens.forEach((t) => {
       switch (t.type) {
+        case 'episode': {
+          lastSpeaker = null;
+          if (opts.restartSceneNumbers) sceneCounter = 0;
+          episode = SF.plainText(t.text).toUpperCase();
+          if (opts.episodeNewPage) blocks.push({ kind: 'page_break', lines: [] });
+          const lines = wrapText(upper(t.text), EL.centered.width, { b: true, u: true }).map((runs) => ({ kind: 'episode', segs: [seg(placeX(EL.centered, runs), runs)], src: t.line }));
+          blocks.push({ kind: 'episode', lines, spaceBefore: 2, keepWithNext: true, episode });
+          break;
+        }
         case 'scene_heading': {
           lastSpeaker = null;
           sceneCounter++;
@@ -181,7 +193,7 @@
             }
             return { kind: 'scene_heading', segs, src: t.line };
           });
-          blocks.push({ kind: 'scene_heading', lines, spaceBefore: opts.doubleSpaceSceneHeadings ? 2 : 1, keepWithNext: true, scene: { text: SF.plainText(t.text).toUpperCase(), number } });
+          blocks.push({ kind: 'scene_heading', lines, spaceBefore: opts.doubleSpaceSceneHeadings ? 2 : 1, keepWithNext: true, scene: { text: SF.plainText(t.text).toUpperCase(), number, episode } });
           break;
         }
         case 'action': {
@@ -324,6 +336,7 @@
       for (let s = 0; s < space; s++) cur.push(null);
       b.lines.forEach((l) => cur.push(l));
       if (b.scene) curScenes.push(b.scene);
+      if (b.episode) curScenes.push({ episodeMarker: b.episode });
     };
 
     let guard = 0;
@@ -473,14 +486,26 @@
 
     // Stats for the outline / status bar
     const scenes = [];
+    const episodes = [];
     const characters = new Map();
     let words = 0;
-    pages.forEach((p) => p.scenes.forEach((s) => scenes.push({ ...s, page: p.number })));
+    pages.forEach((p) =>
+      p.scenes.forEach((s) => {
+        if (s.episodeMarker) episodes.push({ text: s.episodeMarker, page: p.number, scenes: 0 });
+        else {
+          scenes.push({ ...s, page: p.number });
+          if (episodes.length) episodes[episodes.length - 1].scenes++;
+        }
+      })
+    );
+    pages.forEach((p) => (p.scenes = p.scenes.filter((s) => !s.episodeMarker)));
     const countWords = (s) => (s.match(/\S+/g) || []).length;
     const addChar = (name) => characters.set(name, (characters.get(name) || 0) + 1);
     const sceneLines = [];
+    const episodeLines = [];
     parsed.tokens.forEach((t) => {
       if (t.type === 'scene_heading') sceneLines.push(t.line);
+      if (t.type === 'episode') episodeLines.push(t.line);
       if (t.type === 'action') t.lines.forEach((l) => (words += countWords(SF.plainText(l.text))));
       if (t.type === 'dialogue' || t.type === 'dual_dialogue') {
         (t.type === 'dialogue' ? [t] : [t.left, t.right]).forEach((d) => {
@@ -490,6 +515,7 @@
       }
     });
     scenes.forEach((s, k) => (s.line = sceneLines[k]));
+    episodes.forEach((e, k) => (e.line = episodeLines[k]));
 
     return {
       size,
@@ -500,6 +526,7 @@
       stats: {
         pages: pages.length,
         scenes,
+        episodes,
         characters: [...characters.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
         words,
         runtimeMinutes: Math.max(1, Math.round(pages.length)),
