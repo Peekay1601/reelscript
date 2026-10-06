@@ -1,5 +1,5 @@
 /*
- * ReelScript unit tests — run with:  node formatter/tests/run.js
+ * ReelScript unit tests — run with:  node tests/run.js
  * No dependencies; exercises the parser, layout/pagination and exporters.
  */
 'use strict';

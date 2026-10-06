@@ -1,6 +1,6 @@
 # ReelScript — Screenplay Formatter
 
-A browser-based screenplay editor and formatter with a live page preview and one-click, industry-standard PDF export. It's a static site with no backend, build step or API keys. Open `formatter/index.html` or host the folder anywhere (GitHub Pages, Netlify, S3…).
+A browser-based screenplay editor and formatter with a live page preview and one-click, industry-standard PDF export. It's a static site with no backend, build step or API keys. Open `index.html` locally, or host this repo on any static host (GitHub Pages, Netlify, S3…).
 
 ## Features
 
